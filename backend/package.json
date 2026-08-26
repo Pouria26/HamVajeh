@@ -7,7 +7,8 @@
     "build": "tsc",
     "init-schema": "ts-node src/db/initSchema.ts",
     "import-csv": "ts-node src/importDataset.ts",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "test": "jest --runInBand"
   },
   "dependencies": {
     "csv-parse": "^5.5.6",
@@ -17,8 +18,13 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
     "@types/node": "^22.5.0",
     "@types/pg": "^8.11.6",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   }
