@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16
+    container_name: hamvajeh-postgres
+    environment:
+      POSTGRES_USER: hamvajeh
+      POSTGRES_PASSWORD: hamvajeh
+      POSTGRES_DB: hamvajeh
+    ports:
+      - "5432:5432"
+    volumes:
+      - hamvajeh_pgdata:/var/lib/postgresql/data
+
+volumes:
+  hamvajeh_pgdata:

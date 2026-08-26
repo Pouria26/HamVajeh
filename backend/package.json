@@ -1,0 +1,25 @@
+{
+  "name": "hamvajeh-backend",
+  "version": "0.1.0",
+  "description": "Backend for the HamVajeh Persian collocation learning system",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "init-schema": "ts-node src/db/initSchema.ts",
+    "import-csv": "ts-node src/importDataset.ts",
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.5.0",
+    "@types/pg": "^8.11.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  }
+}
