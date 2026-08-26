@@ -6,7 +6,10 @@ export const collocationsRouter = Router();
 // GET /api/collocations/search?q=قرار&limit=20
 collocationsRouter.get("/search", async (req: Request, res: Response) => {
     const q = String(req.query.q ?? "").trim();
-    const limit = Math.min(Number(req.query.limit ?? 20) || 20, 50);
+    const parsedLimit = Number(req.query.limit ?? 20);
+    const limit = Number.isInteger(parsedLimit)
+        ? Math.min(Math.max(parsedLimit, 1), 50)
+        : 20;
 
     if (!q) {
         res.json({ results: [] });
@@ -15,17 +18,18 @@ collocationsRouter.get("/search", async (req: Request, res: Response) => {
 
     try {
         const { rows } = await pool.query(
-            `SELECT id, display_form, pos_pattern, minmax_score
+            `SELECT id, pair_id, display_form, pos_pattern, minmax_score
              FROM collocations
              WHERE display_form ILIKE '%' || $1 || '%'
                 OR similarity(display_form, $1) > 0.15
              ORDER BY
-                (display_form ILIKE $1 || '%') DESC,  -- prefix matches first
+                (display_form ILIKE $1 || '%') DESC,
                 similarity(display_form, $1) DESC,
-                minmax_score DESC
+                minmax_score DESC NULLS LAST
              LIMIT $2`,
             [q, limit]
         );
+
         res.json({ results: rows });
     } catch (err) {
         console.error("Search failed:", err);
@@ -33,31 +37,41 @@ collocationsRouter.get("/search", async (req: Request, res: Response) => {
     }
 });
 
-// GET /api/collocations/:id  -> full detail + example sentences (no options/answers here)
+// GET /api/collocations/:id -> full detail + example sentences
 collocationsRouter.get("/:id", async (req: Request, res: Response) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) {
+
+    if (!Number.isInteger(id) || id <= 0) {
         res.status(400).json({ error: "invalid_id" });
         return;
     }
 
     try {
         const { rows: collocationRows } = await pool.query(
-            `SELECT id, display_form, word1, word2, pos_pattern, pmi, t_score, llr, logdice, combined_score, minmax_score
-             FROM collocations WHERE id = $1`,
+            `SELECT id, pair_id, display_form, word1, word2, pos_pattern,
+                    pmi, t_score, llr, logdice, combined_score, minmax_score
+             FROM collocations
+             WHERE id = $1`,
             [id]
         );
+
         if (collocationRows.length === 0) {
             res.status(404).json({ error: "not_found" });
             return;
         }
 
         const { rows: exampleRows } = await pool.query(
-            `SELECT id, sentence, example_order FROM examples WHERE collocation_id = $1 ORDER BY example_order ASC`,
+            `SELECT id, sentence, example_order
+             FROM examples
+             WHERE collocation_id = $1
+             ORDER BY example_order ASC`,
             [id]
         );
 
-        res.json({ collocation: collocationRows[0], examples: exampleRows });
+        res.json({
+            collocation: collocationRows[0],
+            examples: exampleRows,
+        });
     } catch (err) {
         console.error("Detail fetch failed:", err);
         res.status(500).json({ error: "detail_failed" });

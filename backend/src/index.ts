@@ -3,7 +3,6 @@ import dotenv from "dotenv";
 import { pool } from "./db/pool";
 import { collocationsRouter } from "./routes/collocations";
 import { exercisesRouter } from "./routes/exercises";
-import { agentRouter } from "./routes/agent";
 
 dotenv.config();
 
@@ -35,7 +34,6 @@ app.get("/health", async (_req, res) => {
 
 app.use("/api/collocations", collocationsRouter);
 app.use("/api/exercises", exercisesRouter);
-app.use("/api/agent", agentRouter);
 
 app.listen(port, () => {
     console.log(`HamVajeh backend listening on http://localhost:${port}`);
