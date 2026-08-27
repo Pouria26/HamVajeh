@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getCollocationDetail } from "../api/collocations";
+import { getCollocationDetail, getRelatedCollocations } from "../api/collocations";
 import { ExampleCard } from "../components/ExampleCard";
 import { ScoreBadge } from "../components/ScoreBadge";
+import { CollocationCard } from "../components/CollocationCard";
 import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
-import type { CollocationDetailResponse } from "../types";
+import type { CollocationDetailResponse, CollocationSummary } from "../types";
 
 export function CollocationDetail() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<CollocationDetailResponse | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "notfound" | "done">("loading");
+
+  const [related, setRelated] = useState<CollocationSummary[]>([]);
+  const [relatedStatus, setRelatedStatus] = useState<"loading" | "error" | "done">("loading");
 
   const load = async () => {
     if (!id) return;
@@ -25,8 +29,21 @@ export function CollocationDetail() {
     }
   };
 
+  const loadRelated = async () => {
+    if (!id) return;
+    setRelatedStatus("loading");
+    try {
+      const res = await getRelatedCollocations(id);
+      setRelated(res.results);
+      setRelatedStatus("done");
+    } catch {
+      setRelatedStatus("error");
+    }
+  };
+
   useEffect(() => {
     load();
+    loadRelated();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -95,6 +112,23 @@ export function CollocationDetail() {
           </ul>
         )}
       </div>
+
+      {relatedStatus !== "error" && (relatedStatus === "loading" || related.length > 0) && (
+        <div className="mt-10">
+          <h2 className="mb-4 text-lg font-bold text-ink-900">باهم‌آیی‌های مرتبط</h2>
+          {relatedStatus === "loading" ? (
+            <div className="flex items-center gap-2 text-sm text-ink-400">
+              <Spinner className="h-4 w-4" /> در حال بارگذاری…
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {related.map((c) => (
+                <CollocationCard key={c.id} collocation={c} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

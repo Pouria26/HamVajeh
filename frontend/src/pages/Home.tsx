@@ -1,30 +1,40 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SearchBox } from "../components/SearchBox";
+import { CollocationCard } from "../components/CollocationCard";
+import { SearchResultsSkeleton } from "../components/ui/Spinner";
+import { getFeaturedCollocations } from "../api/collocations";
+import type { CollocationSummary } from "../types";
 
 const features = [
-  {
-    icon: "🔎",
-    title: "جستجوی هوشمند",
-    desc: "یک واژه را بنویسید تا رایج‌ترین باهم‌آیی‌های آن را ببینید.",
-  },
-  {
-    icon: "📖",
-    title: "جمله‌های واقعی",
-    desc: "برای هر باهم‌آیی، چند جمله‌ی نمونه‌ی طبیعی و کاربردی ببینید.",
-  },
-  {
-    icon: "✍️",
-    title: "تمرین جای‌خالی",
-    desc: "با تمرین‌های چهارگزینه‌ای، یادگیری‌تان را بسنجید و تثبیت کنید.",
-  },
+  { icon: "🔎", title: "جستجوی هوشمند", desc: "یک واژه را بنویسید تا باهم‌آیی‌های آن را ببینید." },
+  { icon: "📖", title: "جمله‌های واقعی", desc: "برای هر باهم‌آیی، چند جمله‌ی نمونه‌ی طبیعی ببینید." },
+  { icon: "✍️", title: "تمرین جای‌خالی", desc: "با تمرین‌های چهارگزینه‌ای، یادگیری‌تان را بسنجید." },
 ];
 
 export function Home() {
   const navigate = useNavigate();
+  const [featured, setFeatured] = useState<CollocationSummary[]>([]);
+  const [status, setStatus] = useState<"loading" | "error" | "done">("loading");
+
+  const loadFeatured = async () => {
+    setStatus("loading");
+    try {
+      const res = await getFeaturedCollocations(6);
+      setFeatured(res.results);
+      setStatus("done");
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    loadFeatured();
+  }, []);
 
   return (
     <div>
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-500 to-brand-700 px-6 py-16 text-center text-white sm:py-20">
+      <section className="relative overflow-hidden rounded-3xl bg-linear-to-br from-brand-500 to-brand-700 px-6 py-16 text-center text-white sm:py-20">
         <div className="absolute -top-16 -right-16 h-56 w-56 rounded-full bg-white/10" />
         <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-white/10" />
 
@@ -47,17 +57,47 @@ export function Home() {
         </div>
       </section>
 
-      <section className="mt-14 grid grid-cols-1 gap-5 sm:grid-cols-3">
+      <section className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-3">
         {features.map((f) => (
           <div
             key={f.title}
-            className="rounded-2xl border border-ink-100 bg-white p-6 text-center shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+            className="flex items-center gap-3 rounded-2xl border border-ink-100 bg-white p-4 shadow-sm"
           >
-            <div className="mb-3 text-4xl">{f.icon}</div>
-            <h3 className="mb-1 font-bold text-ink-900">{f.title}</h3>
-            <p className="text-sm text-ink-500">{f.desc}</p>
+            <div className="text-2xl">{f.icon}</div>
+            <div>
+              <h3 className="text-sm font-bold text-ink-900">{f.title}</h3>
+              <p className="text-xs text-ink-500">{f.desc}</p>
+            </div>
           </div>
         ))}
+      </section>
+
+      <section className="mt-14">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-ink-900">باهم‌آیی‌های پرکاربرد</h2>
+          {status === "done" && (
+            <button
+              onClick={loadFeatured}
+              className="text-sm font-medium text-brand-600 transition hover:text-brand-700"
+            >
+              نمونه‌های دیگر ↻
+            </button>
+          )}
+        </div>
+
+        {status === "loading" && <SearchResultsSkeleton count={6} />}
+
+        {status === "error" && (
+          <p className="text-sm text-ink-400">بارگذاری باهم‌آیی‌های پرکاربرد ممکن نشد.</p>
+        )}
+
+        {status === "done" && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {featured.map((c) => (
+              <CollocationCard key={c.id} collocation={c} />
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="mt-14 flex flex-col items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 px-6 py-10 text-center">
