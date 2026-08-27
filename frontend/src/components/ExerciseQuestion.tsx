@@ -1,0 +1,91 @@
+import { useState } from "react";
+import { checkAnswer } from "../api/exercises";
+import { Spinner } from "./ui/Spinner";
+
+interface Props {
+  exampleId: number;
+  blankSentence: string;
+  options: { id: number; text: string }[];
+  onResult?: (isCorrect: boolean) => void;
+}
+
+export function ExerciseQuestion({ exampleId, blankSentence, options, onResult }: Props) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [result, setResult] = useState<{ isCorrect: boolean; correctAnswer: string } | null>(
+    null
+  );
+  const [checking, setChecking] = useState(false);
+
+  const handleSelect = async (optionId: number) => {
+    if (checking || result) return;
+    setSelectedId(optionId);
+    setChecking(true);
+    try {
+      const res = await checkAnswer(exampleId, optionId);
+      setResult(res);
+      onResult?.(res.isCorrect);
+    } catch {
+      setResult(null);
+      setSelectedId(null);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const parts = blankSentence.split("___________");
+
+  return (
+    <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
+      <p dir="rtl" className="mb-6 text-xl leading-10 text-ink-900">
+        {parts[0]}
+        <span
+          className={`mx-1 inline-block min-w-24 rounded-lg border-b-2 px-2 py-0.5 text-center font-bold ${
+            result
+              ? result.isCorrect
+                ? "border-success-500 bg-success-100 text-success-500"
+                : "border-danger-500 bg-danger-100 text-danger-500"
+              : "border-brand-400 bg-brand-50 text-brand-500"
+          }`}
+        >
+          {result ? result.correctAnswer : "___________"}
+        </span>
+        {parts[1]}
+      </p>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {options.map((option) => {
+          const isSelected = selectedId === option.id;
+          const isCorrectOption = result && option.text === result.correctAnswer;
+          const isWrongSelected = result && isSelected && !result.isCorrect;
+
+          let stateClasses =
+            "border-ink-200 bg-white hover:border-brand-300 hover:bg-brand-50";
+          if (result) {
+            if (isCorrectOption) {
+              stateClasses = "border-success-500 bg-success-100 text-success-500";
+            } else if (isWrongSelected) {
+              stateClasses = "border-danger-500 bg-danger-100 text-danger-500 animate-shake";
+            } else {
+              stateClasses = "border-ink-100 bg-ink-50 text-ink-400";
+            }
+          }
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              disabled={checking || !!result}
+              onClick={() => handleSelect(option.id)}
+              className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 text-right text-base font-medium transition ${stateClasses} disabled:cursor-default`}
+            >
+              <span>{option.text}</span>
+              {checking && isSelected && <Spinner className="h-4 w-4 text-brand-500" />}
+              {isCorrectOption && <span>✓</span>}
+              {isWrongSelected && <span>✕</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Vazirmatn", system-ui, "Segoe UI", Tahoma, sans-serif;
+
+  /* Warm, education-friendly palette (not generic corporate blue) */
+  --color-brand-50: #fef6ee;
+  --color-brand-100: #fce9d3;
+  --color-brand-200: #f8cea1;
+  --color-brand-300: #f3ac6a;
+  --color-brand-400: #ee8a3e;
+  --color-brand-500: #e76f1f;
+  --color-brand-600: #d15414;
+  --color-brand-700: #ad3d13;
+  --color-brand-800: #8a3116;
+  --color-brand-900: #712a15;
+
+  --color-ink-50: #f7f7f8;
+  --color-ink-100: #eeeef0;
+  --color-ink-200: #d9d9de;
+  --color-ink-300: #b7b7c0;
+  --color-ink-400: #8f8f9c;
+  --color-ink-500: #6f6f7d;
+  --color-ink-600: #575765;
+  --color-ink-700: #454452;
+  --color-ink-800: #2c2b36;
+  --color-ink-900: #19181f;
+
+  --color-success-500: #16a34a;
+  --color-success-100: #dcfce7;
+  --color-danger-500: #dc2626;
+  --color-danger-100: #fee2e2;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-ink-50);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--color-brand-200);
+  color: var(--color-brand-900);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-200);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-300);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
