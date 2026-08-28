@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 const navItems = [
   { to: "/", label: "خانه" },
   { to: "/search", label: "جستجو" },
+  { to: "/browse", label: "مرور" },
   { to: "/exercise", label: "تمرین" },
 ];
 

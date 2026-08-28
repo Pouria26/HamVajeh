@@ -7,6 +7,7 @@ import { Home } from "./pages/Home";
 import { Search } from "./pages/Search";
 import { CollocationDetail } from "./pages/CollocationDetail";
 import { Exercise } from "./pages/Exercise";
+import { Browse } from "./pages/Browse";
 import { NotFound } from "./pages/NotFound";
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
               <Route path="/search" element={<Search />} />
               <Route path="/collocation/:id" element={<CollocationDetail />} />
               <Route path="/exercise" element={<Exercise />} />
+              <Route path="/browse" element={<Browse />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </PageContainer>

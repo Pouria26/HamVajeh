@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getCollocationExercises, getRandomExercise } from "../api/exercises";
+import { recordExerciseAttempt } from "../lib/localHistory";
 import { ExerciseQuestion } from "../components/ExerciseQuestion";
 import { Spinner } from "../components/ui/Spinner";
 import { EmptyState, ErrorState } from "../components/ui/States";
@@ -67,9 +68,10 @@ function RandomExerciseMode() {
             exampleId={current.exampleId}
             blankSentence={current.blankSentence}
             options={current.options}
-            onResult={(isCorrect) =>
-              setScore((s) => ({ correct: s.correct + (isCorrect ? 1 : 0), total: s.total + 1 }))
-            }
+            onResult={(isCorrect) => {
+              recordExerciseAttempt(isCorrect);
+              setScore((s) => ({ correct: s.correct + (isCorrect ? 1 : 0), total: s.total + 1 }));
+            }}
           />
           <button
             onClick={load}
@@ -166,6 +168,7 @@ function CollocationExerciseSet({ collocationId }: { collocationId: string }) {
         blankSentence={current.blankSentence}
         options={current.options}
         onResult={(isCorrect) => {
+          recordExerciseAttempt(isCorrect);
           if (isCorrect) setScore((s) => s + 1);
         }}
       />

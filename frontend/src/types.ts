@@ -6,6 +6,20 @@ export interface CollocationSummary {
   minmax_score: number | null;
 }
 
+export interface PatternCount {
+  pos_pattern: string;
+  count: number;
+}
+
+export interface PatternsResponse {
+  patterns: PatternCount[];
+}
+
+export interface BrowseResponse {
+  results: CollocationSummary[];
+  total: number;
+}
+
 export interface CollocationDetail {
   id: number;
   pair_id: number;

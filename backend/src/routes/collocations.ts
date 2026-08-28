@@ -12,6 +12,9 @@ const RELATED_QUALITY_THRESHOLD = 0.2;
 // FEATURED (homepage): strict bar — only the clear top ~10% ever appears on the
 // homepage, since that's the first impression and must never show a noisy pair.
 const FEATURED_QUALITY_THRESHOLD = 0.35;
+// BROWSE: same lenient bar as RELATED — this is a showcase/discovery feature,
+// so it should feel populated per category while still excluding pure noise.
+const BROWSE_QUALITY_THRESHOLD = 0.2;
 
 // GET /api/collocations/search?q=قرار&limit=20
 // Intentionally NOT quality-filtered: the learner should be able to find and see
@@ -33,7 +36,7 @@ collocationsRouter.get("/search", async (req: Request, res: Response) => {
             `SELECT id, pair_id, display_form, pos_pattern, minmax_score
              FROM collocations
              WHERE display_form ILIKE '%' || $1 || '%'
-                OR similarity(display_form, $1) > 0.5
+                OR similarity(display_form, $1) > 0.35
              ORDER BY
                 (display_form ILIKE $1 || '%') DESC,
                 similarity(display_form, $1) DESC,
@@ -72,6 +75,66 @@ collocationsRouter.get("/featured", async (req: Request, res: Response) => {
     } catch (err) {
         console.error("Featured fetch failed:", err);
         res.status(500).json({ error: "featured_failed" });
+    }
+});
+
+// GET /api/collocations/patterns
+// Distinct pos_pattern values with counts, for the browse-by-category page.
+// Counted within the same quality bar as /browse so the numbers shown match
+// what the user will actually see when they open a category.
+collocationsRouter.get("/patterns", async (_req: Request, res: Response) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT pos_pattern, count(*)::int AS count
+             FROM collocations
+             WHERE minmax_score > $1 AND pos_pattern IS NOT NULL
+             GROUP BY pos_pattern
+             ORDER BY count DESC`,
+            [BROWSE_QUALITY_THRESHOLD]
+        );
+        res.json({ patterns: rows });
+    } catch (err) {
+        console.error("Patterns fetch failed:", err);
+        res.status(500).json({ error: "patterns_failed" });
+    }
+});
+
+// GET /api/collocations/browse?pattern=NOUN+VERB&limit=24&offset=0
+// Quality-filtered listing for one pos_pattern category, with simple offset
+// pagination ("more" button) and a total count.
+collocationsRouter.get("/browse", async (req: Request, res: Response) => {
+    const pattern = String(req.query.pattern ?? "").trim();
+    const parsedLimit = Number(req.query.limit ?? 24);
+    const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 60) : 24;
+    const parsedOffset = Number(req.query.offset ?? 0);
+    const offset = Number.isInteger(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+
+    if (!pattern) {
+        res.status(400).json({ error: "missing_pattern" });
+        return;
+    }
+
+    try {
+        const { rows } = await pool.query(
+            `SELECT id, pair_id, display_form, pos_pattern, minmax_score
+             FROM collocations
+             WHERE pos_pattern = $1 AND minmax_score > $2
+             ORDER BY minmax_score DESC NULLS LAST
+             LIMIT $3 OFFSET $4`,
+            [pattern, BROWSE_QUALITY_THRESHOLD, limit, offset]
+        );
+
+        const { rows: countRows } = await pool.query(
+            `SELECT count(*)::int AS total
+             FROM collocations
+             WHERE pos_pattern = $1 AND minmax_score > $2`,
+            [pattern, BROWSE_QUALITY_THRESHOLD]
+        );
+
+        res.json({ results: rows, total: countRows[0]?.total ?? 0 });
+    } catch (err) {
+        console.error("Browse fetch failed:", err);
+        res.status(500).json({ error: "browse_failed" });
     }
 });
 

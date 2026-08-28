@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getCollocationDetail, getRelatedCollocations } from "../api/collocations";
+import { recordCollocationView } from "../lib/localHistory";
 import { ExampleCard } from "../components/ExampleCard";
 import { ScoreBadge } from "../components/ScoreBadge";
 import { CollocationCard } from "../components/CollocationCard";
 import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
+import { patternLabel } from "../lib/patternLabels";
 import type { CollocationDetailResponse, CollocationSummary } from "../types";
 
 export function CollocationDetail() {
@@ -23,6 +25,13 @@ export function CollocationDetail() {
       const res = await getCollocationDetail(id);
       setData(res);
       setStatus("done");
+      recordCollocationView({
+        id: res.collocation.id,
+        pair_id: res.collocation.pair_id,
+        display_form: res.collocation.display_form,
+        pos_pattern: res.collocation.pos_pattern,
+        minmax_score: res.collocation.minmax_score,
+      });
     } catch (err: unknown) {
       const isNotFound = (err as { status?: number })?.status === 404;
       setStatus(isNotFound ? "notfound" : "error");
@@ -87,7 +96,7 @@ export function CollocationDetail() {
         <div className="mt-3 flex flex-wrap gap-2">
           {collocation.pos_pattern && (
             <span className="rounded-md bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-600">
-              الگوی نحوی: {collocation.pos_pattern}
+              الگوی نحوی: {patternLabel(collocation.pos_pattern)}
             </span>
           )}
         </div>
