@@ -3,6 +3,87 @@ import { pool } from "../db/pool";
 
 export const exercisesRouter = Router();
 
+// Same lenient quality bar used for /browse and /related — the daily challenge
+// is a showcase feature, so it should never surface a noisy, low-score pair.
+const CHALLENGE_QUALITY_THRESHOLD = 0.2;
+const CHALLENGE_SIZE = 5;
+
+// Turns a date string like "2026-08-29" into a stable float in (-1, 1),
+// which is what Postgres's setseed() requires. Same date -> same seed always.
+function dateToSeed(dateStr: string): number {
+    let hash = 0;
+    for (let i = 0; i < dateStr.length; i++) {
+        hash = (hash * 31 + dateStr.charCodeAt(i)) | 0;
+    }
+    return ((hash % 1000) + 1000) % 1000 / 1000 - 0.5; // -> range (-0.5, 0.5)
+}
+
+function todayUTC(): string {
+    return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+}
+
+// GET /api/exercises/daily-challenge
+// Returns the SAME 5 exercises for everyone, for the whole UTC day — deterministic
+// via Postgres setseed() derived from today's date, not fresh randomness per call.
+exercisesRouter.get("/daily-challenge", async (_req: Request, res: Response) => {
+    const date = todayUTC();
+    const seed = dateToSeed(date);
+
+    // setseed() is connection-scoped, so we must run the seed + the query on the
+    // SAME client (not pool.query, which may hand out a different connection).
+    const client = await pool.connect();
+    try {
+        await client.query("SELECT setseed($1)", [seed]);
+
+        const { rows: exampleRows } = await client.query(
+            `SELECT e.id, e.collocation_id, e.blank_sentence, c.display_form
+             FROM examples e
+             JOIN collocations c ON c.id = e.collocation_id
+             WHERE e.blank_sentence IS NOT NULL
+                AND c.minmax_score > $1
+             ORDER BY random()
+             LIMIT $2`,
+            [CHALLENGE_QUALITY_THRESHOLD, CHALLENGE_SIZE]
+        );
+
+        if (exampleRows.length === 0) {
+            res.status(404).json({ error: "no_exercises_available" });
+            return;
+        }
+
+        const exampleIds = exampleRows.map((r) => r.id);
+        const { rows: optionRows } = await client.query(
+            `SELECT id, example_id, option_text, option_order
+             FROM exercise_options
+             WHERE example_id = ANY($1::int[])
+             ORDER BY option_order ASC`,
+            [exampleIds]
+        );
+
+        const optionsByExample = new Map<number, { id: number; text: string }[]>();
+        for (const o of optionRows) {
+            const list = optionsByExample.get(o.example_id) ?? [];
+            list.push({ id: o.id, text: o.option_text });
+            optionsByExample.set(o.example_id, list);
+        }
+
+        res.json({
+            date,
+            exercises: exampleRows.map((e) => ({
+                exampleId: e.id,
+                collocationDisplayForm: e.display_form,
+                blankSentence: e.blank_sentence,
+                options: optionsByExample.get(e.id) ?? [],
+            })),
+        });
+    } catch (err) {
+        console.error("Daily challenge fetch failed:", err);
+        res.status(500).json({ error: "daily_challenge_failed" });
+    } finally {
+        client.release();
+    }
+});
+
 // GET /api/exercises/random -> one random exercise with shuffled options
 exercisesRouter.get("/random", async (_req: Request, res: Response) => {
     try {

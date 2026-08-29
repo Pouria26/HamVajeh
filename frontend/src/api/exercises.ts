@@ -2,11 +2,16 @@ import { apiClient } from "./client";
 import type {
   CheckAnswerResponse,
   CollocationExercisesResponse,
+  DailyChallengeResponse,
   RandomExerciseResponse,
 } from "../types";
 
 export function getRandomExercise() {
   return apiClient.get<RandomExerciseResponse>("/api/exercises/random");
+}
+
+export function getDailyChallenge() {
+  return apiClient.get<DailyChallengeResponse>("/api/exercises/daily-challenge");
 }
 
 export function getCollocationExercises(collocationId: number | string) {

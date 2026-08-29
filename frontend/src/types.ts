@@ -55,6 +55,18 @@ export interface ExerciseOption {
   text: string;
 }
 
+export interface DailyChallengeQuestion {
+  exampleId: number;
+  collocationDisplayForm: string;
+  blankSentence: string;
+  options: ExerciseOption[];
+}
+
+export interface DailyChallengeResponse {
+  date: string;
+  exercises: DailyChallengeQuestion[];
+}
+
 export interface RandomExerciseResponse {
   exampleId: number;
   collocationId: number;

@@ -22,6 +22,18 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
+/** Matches the backend's date format exactly (UTC "YYYY-MM-DD"), so the daily
+ * challenge lock-key always lines up with whatever date the backend picked. */
+export function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function tomorrowUTC(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // --- Recently viewed collocations ---
 
 export function getRecentlyViewed(): RecentEntry[] {
@@ -42,7 +54,30 @@ export function recordCollocationView(collocation: CollocationSummary): void {
   }
 }
 
-// --- Exercise score tracking ---
+// --- Daily challenge results (one per calendar date, locked once completed) ---
+
+export interface DailyChallengeResult {
+  score: number;
+  total: number;
+  elapsedSeconds: number;
+  completedAt: number;
+}
+
+function dailyChallengeKey(date: string): string {
+  return `hamvajeh:dailyChallenge:${date}`;
+}
+
+export function getDailyChallengeResult(date: string): DailyChallengeResult | null {
+  return safeParse<DailyChallengeResult | null>(localStorage.getItem(dailyChallengeKey(date)), null);
+}
+
+export function saveDailyChallengeResult(date: string, result: DailyChallengeResult): void {
+  try {
+    localStorage.setItem(dailyChallengeKey(date), JSON.stringify(result));
+  } catch {
+    // same rationale as above — non-critical feature, fail silently
+  }
+}
 
 export function getExerciseStats(): ExerciseStats {
   return safeParse<ExerciseStats>(localStorage.getItem(STATS_KEY), { correct: 0, total: 0 });

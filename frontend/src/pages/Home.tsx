@@ -158,10 +158,26 @@ export function Home() {
         )}
       </section>
 
-      <section className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <section className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border border-amber-200 bg-linear-to-br from-amber-50 to-orange-50 px-6 py-10 text-center">
+          <span className="absolute top-3 left-3 rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-bold text-white">
+            جدید
+          </span>
+          <div className="text-3xl">🏆</div>
+          <h2 className="text-lg font-bold text-amber-900">چالش روزانه</h2>
+          <p className="max-w-xs text-sm text-amber-700">۵ تمرین با تایمر، امتیازت را با دوستانت به اشتراک بگذار.</p>
+          <button
+            onClick={() => navigate("/challenge")}
+            className="mt-2 rounded-full bg-amber-500 px-8 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-md active:translate-y-0"
+          >
+            شروع چالش
+          </button>
+        </div>
+
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 px-6 py-10 text-center">
-          <h2 className="text-lg font-bold text-brand-800">آماده‌اید مهارتتان را بسنجید؟</h2>
-          <p className="max-w-xs text-sm text-brand-700">یک تمرین تصادفی جای‌خالی را امتحان کنید.</p>
+          <div className="text-3xl">✍️</div>
+          <h2 className="text-lg font-bold text-brand-800">تمرین آزاد</h2>
+          <p className="max-w-xs text-sm text-brand-700">یک تمرین تصادفی جای‌خالی را بدون محدودیت زمانی امتحان کنید.</p>
           <button
             onClick={() => navigate("/exercise")}
             className="mt-2 rounded-full bg-brand-500 px-8 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0"
@@ -171,6 +187,7 @@ export function Home() {
         </div>
 
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-ink-100 bg-white px-6 py-10 text-center">
+          <div className="text-3xl">🗂️</div>
           <h2 className="text-lg font-bold text-ink-900">نمی‌دانید چه جستجو کنید؟</h2>
           <p className="max-w-xs text-sm text-ink-500">بر اساس دسته‌بندی زبانی کاوش کنید.</p>
           <button

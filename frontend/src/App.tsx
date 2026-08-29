@@ -8,6 +8,7 @@ import { Search } from "./pages/Search";
 import { CollocationDetail } from "./pages/CollocationDetail";
 import { Exercise } from "./pages/Exercise";
 import { Browse } from "./pages/Browse";
+import { DailyChallenge } from "./pages/DailyChallenge";
 import { NotFound } from "./pages/NotFound";
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
               <Route path="/collocation/:id" element={<CollocationDetail />} />
               <Route path="/exercise" element={<Exercise />} />
               <Route path="/browse" element={<Browse />} />
+              <Route path="/challenge" element={<DailyChallenge />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </PageContainer>

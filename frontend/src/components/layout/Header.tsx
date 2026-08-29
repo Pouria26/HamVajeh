@@ -5,6 +5,7 @@ const navItems = [
   { to: "/search", label: "جستجو" },
   { to: "/browse", label: "مرور" },
   { to: "/exercise", label: "تمرین" },
+  { to: "/challenge", label: "چالش روزانه" },
 ];
 
 export function Header() {
@@ -18,14 +19,14 @@ export function Header() {
           هم‌واژه
         </NavLink>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-1 overflow-x-auto">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === "/"}
               className={({ isActive }) =>
-                `rounded-full px-4 py-2 text-sm font-medium transition ${
+                `shrink-0 rounded-full px-3.5 py-2 text-sm font-medium transition sm:px-4 ${
                   isActive
                     ? "bg-brand-500 text-white shadow-sm"
                     : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
