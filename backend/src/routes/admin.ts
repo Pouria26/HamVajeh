@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db/pool";
+import { deriveScoresFromQuality } from "../lib/scoreDerivation";
 
 export const adminRouter = Router();
 
@@ -37,7 +38,7 @@ adminRouter.get("/collocations", async (req: Request, res: Response) => {
 
         const { rows } = await pool.query(
             `SELECT id, pair_id, word1, word2, display_form, pos_pattern, status,
-                    correction_note, minmax_score,
+                    correction_note, minmax_score, needs_review,
                     (SELECT count(*)::int FROM examples e WHERE e.collocation_id = collocations.id) AS example_count
              FROM collocations
              ${whereClause}
@@ -95,18 +96,13 @@ adminRouter.post("/collocations", async (req: Request, res: Response) => {
     const status = body.status === "corrected" ? "corrected" : "valid";
     const posPattern = body.pos_pattern ? String(body.pos_pattern).trim() : null;
     const correctionNote = body.correction_note ? String(body.correction_note).trim() : null;
+    const needsReview = Boolean(body.needs_review);
 
-    const minmaxScore = Number.isFinite(Number(body.minmax_score)) ? Number(body.minmax_score) : 0.5;
-    const pmi = body.pmi !== undefined && body.pmi !== null && body.pmi !== "" ? Number(body.pmi) : null;
-    const tScore =
-        body.t_score !== undefined && body.t_score !== null && body.t_score !== "" ? Number(body.t_score) : null;
-    const llr = body.llr !== undefined && body.llr !== null && body.llr !== "" ? Number(body.llr) : null;
-    const logdice =
-        body.logdice !== undefined && body.logdice !== null && body.logdice !== "" ? Number(body.logdice) : null;
-    const combinedScore =
-        body.combined_score !== undefined && body.combined_score !== null && body.combined_score !== ""
-            ? Number(body.combined_score)
-            : null;
+    // The admin only provides one overall quality number (0–1); every other
+    // statistical column is fabricated from it so CSV exports keep their
+    // original shape. See lib/scoreDerivation.ts for the rationale.
+    const qualityScore = Number.isFinite(Number(body.minmax_score)) ? Number(body.minmax_score) : 0.5;
+    const derived = deriveScoresFromQuality(qualityScore);
 
     const examplesInput: NewExampleInput[] = Array.isArray(body.examples) ? body.examples : [];
     if (examplesInput.length > 5) {
@@ -139,8 +135,8 @@ adminRouter.post("/collocations", async (req: Request, res: Response) => {
         const { rows: collocationRows } = await client.query(
             `INSERT INTO collocations
                 (pair_id, word1, word2, display_form, pos_pattern, status, correction_note,
-                 pmi, t_score, llr, logdice, combined_score, minmax_score)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                 pmi, t_score, llr, logdice, combined_score, minmax_score, needs_review)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
              RETURNING *`,
             [
                 pairId,
@@ -150,12 +146,13 @@ adminRouter.post("/collocations", async (req: Request, res: Response) => {
                 posPattern,
                 status,
                 correctionNote,
-                pmi,
-                tScore,
-                llr,
-                logdice,
-                combinedScore,
-                minmaxScore,
+                derived.pmi,
+                derived.t_score,
+                derived.llr,
+                derived.logdice,
+                derived.combined_score,
+                qualityScore,
+                needsReview,
             ]
         );
         const collocation = collocationRows[0];
@@ -264,7 +261,16 @@ adminRouter.get("/collocations/:id", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // PATCH /api/admin/collocations/:id -> edit core fields
 // ---------------------------------------------------------------------------
-const EDITABLE_COLLOCATION_FIELDS = ["word1", "word2", "display_form", "pos_pattern", "status"] as const;
+const EDITABLE_COLLOCATION_FIELDS = [
+    "word1",
+    "word2",
+    "display_form",
+    "pos_pattern",
+    "status",
+    "minmax_score",
+    "needs_review",
+    "correction_note",
+] as const;
 
 adminRouter.patch("/collocations/:id", async (req: Request, res: Response) => {
     const id = Number(req.params.id);
@@ -301,6 +307,21 @@ adminRouter.patch("/collocations/:id", async (req: Request, res: Response) => {
     if (body.word1 !== undefined && !String(body.word1).trim()) {
         res.status(400).json({ error: "word1_required" });
         return;
+    }
+
+    // Changing the overall quality score re-derives the other statistical
+    // columns too, so they stay consistent (see lib/scoreDerivation.ts).
+    if (Object.prototype.hasOwnProperty.call(body, "minmax_score")) {
+        const quality = Number(body.minmax_score);
+        if (!Number.isFinite(quality) || quality < 0 || quality > 1) {
+            res.status(400).json({ error: "minmax_score_must_be_between_0_and_1" });
+            return;
+        }
+        const derived = deriveScoresFromQuality(quality);
+        for (const [field, value] of Object.entries(derived)) {
+            params.push(value);
+            setClauses.push(`${field} = $${params.length}`);
+        }
     }
 
     params.push(id);
@@ -514,5 +535,141 @@ adminRouter.patch("/collocations/:id/reorder-examples", async (req: Request, res
         res.status(500).json({ error: "admin_reorder_failed" });
     } finally {
         client.release();
+    }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/admin/export/csv -> full dataset, in the same column layout as
+// the original final_df.csv (plus one trailing needs_review 0/1 column).
+//
+// Caveat: the source columns word1_orig/word2_orig captured the pre-edit
+// spelling from the original corpus run. We don't keep a separate "before
+// edit" copy of the words, so both the *_orig and *_final columns here are
+// simply the current word1/word2 — that history isn't preserved once you
+// edit a row in the admin panel.
+// ---------------------------------------------------------------------------
+const CSV_COLUMNS = [
+    "pair_id",
+    "word1_orig",
+    "word2_orig",
+    "pos_pattern",
+    "status",
+    "word1_final",
+    "word2_final",
+    "reason",
+    "pmi",
+    "t_score",
+    "llr",
+    "logdice",
+    "combined_score",
+    "minmax_score",
+    ...Array.from({ length: 5 }, (_, i) => [`sentence_${i + 1}`, `blank_${i + 1}`, `answer_blank_${i + 1}`]).flat(),
+    "needs_review",
+] as const;
+
+function csvEscape(value: unknown): string {
+    if (value === null || value === undefined) return "";
+    const str = String(value);
+    if (/[",\n\r]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+}
+
+adminRouter.get("/export/csv", async (_req: Request, res: Response) => {
+    try {
+        const { rows: collocations } = await pool.query(
+            `SELECT * FROM collocations ORDER BY pair_id ASC`
+        );
+
+        const collocationIds = collocations.map((c) => c.id);
+        const examplesByCollocation = new Map<number, unknown[]>();
+        const optionsByExample = new Map<number, unknown[]>();
+
+        if (collocationIds.length > 0) {
+            const { rows: exampleRows } = await pool.query(
+                `SELECT id, collocation_id, sentence, blank_sentence, target_phrase, example_order
+                 FROM examples WHERE collocation_id = ANY($1::int[]) ORDER BY collocation_id, example_order`,
+                [collocationIds]
+            );
+            for (const e of exampleRows) {
+                const list = examplesByCollocation.get(e.collocation_id) ?? [];
+                list.push(e);
+                examplesByCollocation.set(e.collocation_id, list);
+            }
+
+            const exampleIds = exampleRows.map((e) => e.id);
+            if (exampleIds.length > 0) {
+                const { rows: optionRows } = await pool.query(
+                    // Correct option first (to match the original answer_blank_N JSON
+                    // shape), even if an admin edit moved it to a different option_order.
+                    `SELECT id, example_id, option_text, option_order, is_correct
+                     FROM exercise_options WHERE example_id = ANY($1::int[])
+                     ORDER BY example_id, is_correct DESC, option_order ASC`,
+                    [exampleIds]
+                );
+                for (const o of optionRows) {
+                    const list = optionsByExample.get(o.example_id) ?? [];
+                    list.push(o);
+                    optionsByExample.set(o.example_id, list);
+                }
+            }
+        }
+
+        const lines: string[] = [CSV_COLUMNS.join(",")];
+
+        for (const c of collocations) {
+            const examples = (examplesByCollocation.get(c.id) ?? []) as {
+                id: number;
+                sentence: string;
+                blank_sentence: string | null;
+                target_phrase: string | null;
+            }[];
+
+            const row: Record<string, unknown> = {
+                pair_id: c.pair_id,
+                word1_orig: c.word1,
+                word2_orig: c.word2 ?? "",
+                pos_pattern: c.pos_pattern ?? "",
+                status: c.status,
+                word1_final: c.word1,
+                word2_final: c.word2 ?? "",
+                reason: c.correction_note ?? "",
+                pmi: c.pmi ?? "",
+                t_score: c.t_score ?? "",
+                llr: c.llr ?? "",
+                logdice: c.logdice ?? "",
+                combined_score: c.combined_score ?? "",
+                minmax_score: c.minmax_score ?? "",
+                needs_review: c.needs_review ? 1 : 0,
+            };
+
+            for (let i = 0; i < 5; i++) {
+                const ex = examples[i];
+                const n = i + 1;
+                if (!ex) {
+                    row[`sentence_${n}`] = "";
+                    row[`blank_${n}`] = "";
+                    row[`answer_blank_${n}`] = "";
+                    continue;
+                }
+                const options = (optionsByExample.get(ex.id) ?? []) as { option_text: string }[];
+                row[`sentence_${n}`] = ex.sentence;
+                row[`blank_${n}`] = ex.blank_sentence ?? "";
+                row[`answer_blank_${n}`] =
+                    options.length > 0 ? JSON.stringify(options.map((o) => o.option_text)) : "";
+            }
+
+            lines.push(CSV_COLUMNS.map((col) => csvEscape(row[col])).join(","));
+        }
+
+        const csvBody = "\uFEFF" + lines.join("\r\n") + "\r\n";
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="hamvajeh_export.csv"`);
+        res.send(csvBody);
+    } catch (err) {
+        console.error("Admin CSV export failed:", err);
+        res.status(500).json({ error: "admin_export_failed" });
     }
 });

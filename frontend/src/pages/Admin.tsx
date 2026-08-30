@@ -4,6 +4,7 @@ import {
   createAdminCollocation,
   deleteAdminCollocation,
   deleteAdminExample,
+  downloadAdminCsvExport,
   getAdminCollocation,
   getAdminToken,
   listAdminCollocations,
@@ -133,6 +134,10 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
   // --- create-new state --------------------------------------------------
   const [showCreateForm, setShowCreateForm] = useState(false);
 
+  // --- CSV export state ---------------------------------------------------
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
   // If the token stops working mid-session (revoked / server restarted with
   // a different value), drop back to the login gate instead of spamming errors.
   const handleAuthError = (err: unknown): boolean => {
@@ -199,6 +204,9 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
         display_form: collocation.display_form,
         pos_pattern: collocation.pos_pattern,
         status: collocation.status,
+        minmax_score: collocation.minmax_score ?? undefined,
+        needs_review: collocation.needs_review,
+        correction_note: collocation.correction_note,
       });
       refreshListRow({
         id: collocation.id,
@@ -207,7 +215,12 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
         display_form: collocation.display_form,
         pos_pattern: collocation.pos_pattern,
         status: collocation.status,
+        minmax_score: collocation.minmax_score,
+        needs_review: collocation.needs_review,
+        correction_note: collocation.correction_note,
       });
+      const refreshed = await getAdminCollocation(collocation.id);
+      setCollocation(refreshed.collocation);
       setMessage("ذخیره شد.");
     } catch (err) {
       if (handleAuthError(err)) return;
@@ -329,6 +342,19 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
     }
   };
 
+  const exportCsv = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadAdminCsvExport();
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setExportError("خطا در دریافت خروجی CSV.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const onCreated = (res: { collocation: AdminCollocationFull; examples: AdminExample[] }) => {
     const summary: AdminCollocationSummary = {
       id: res.collocation.id,
@@ -340,6 +366,7 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
       status: res.collocation.status,
       correction_note: res.collocation.correction_note,
       minmax_score: res.collocation.minmax_score,
+      needs_review: res.collocation.needs_review,
       example_count: res.examples.length,
     };
     setResults((prev) => [summary, ...prev]);
@@ -361,18 +388,30 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
             ویرایش، حذف، تغییر ترتیب و افزودن باهم‌آیی — برای بالا بردن کیفیت دیتاست پیش از انتشار.
           </p>
         </div>
-        <button
-          onClick={() => {
-            setShowCreateForm((v) => !v);
-            if (!showCreateForm) {
-              setSelectedId(null);
-              setDetailStatus("idle");
-            }
-          }}
-          className="shrink-0 rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
-        >
-          {showCreateForm ? "بستن فرم" : "+ افزودن باهم‌آیی جدید"}
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="flex gap-2">
+            <button
+              onClick={exportCsv}
+              disabled={exporting}
+              className="rounded-full border border-ink-200 bg-white px-5 py-2 text-sm font-semibold text-ink-700 transition hover:border-brand-300 disabled:opacity-50"
+            >
+              {exporting ? "در حال آماده‌سازی…" : "⬇ دانلود CSV"}
+            </button>
+            <button
+              onClick={() => {
+                setShowCreateForm((v) => !v);
+                if (!showCreateForm) {
+                  setSelectedId(null);
+                  setDetailStatus("idle");
+                }
+              }}
+              className="rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
+            >
+              {showCreateForm ? "بستن فرم" : "+ افزودن باهم‌آیی جدید"}
+            </button>
+          </div>
+          {exportError && <p className="text-xs text-danger-500">{exportError}</p>}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr]">
@@ -428,6 +467,14 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
                 >
                   {r.status === "valid" ? "معتبر" : "اصلاح‌شده"}
                 </span>
+                {r.needs_review && (
+                  <span
+                    title="نیاز به بازبینی"
+                    className="shrink-0 rounded-md bg-warning-100 px-2 py-0.5 text-[11px] font-medium text-warning-500"
+                  >
+                    ⚠ مشکوک
+                  </span>
+                )}
               </button>
             ))}
             {listStatus === "loading" && (
@@ -532,16 +579,48 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
                       <option value="corrected">اصلاح‌شده</option>
                     </select>
                   </Field>
-                  <Field label="امتیاز کیفیت (فقط خواندنی)">
-                    <input className="admin-input" value={collocation.minmax_score ?? "—"} readOnly disabled />
+                  <Field label="امتیاز کیفیت (۰ تا ۱)">
+                    <input
+                      className="admin-input"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="1"
+                      value={collocation.minmax_score ?? ""}
+                      onChange={(e) =>
+                        setCollocation({
+                          ...collocation,
+                          minmax_score: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                    />
                   </Field>
                 </div>
 
-                {collocation.correction_note && (
-                  <p className="mt-3 rounded-lg bg-ink-50 p-3 text-xs text-ink-500">
-                    یادداشت اصلاح (برای مرجع): {collocation.correction_note}
-                  </p>
-                )}
+                <label className="mt-3 flex items-center gap-2 text-sm text-ink-700">
+                  <input
+                    type="checkbox"
+                    checked={collocation.needs_review}
+                    onChange={(e) => setCollocation({ ...collocation, needs_review: e.target.checked })}
+                  />
+                  مشکوک است / نیاز به بازبینی دوباره دارد
+                </label>
+                <p className="mt-1 text-xs text-ink-400">
+                  تغییر امتیاز کیفیت، معیارهای آماری دیگر (pmi، t_score، llr، logdice، combined_score) را هم
+                  به‌صورت خودکار بازمحاسبه می‌کند تا در خروجی CSV هماهنگ بمانند.
+                </p>
+
+                <Field label="دلیل / یادداشت (اختیاری — برای مرجع خودتان یا ابزارهای دیگر مثل ایجنت)">
+                  <textarea
+                    className="admin-input"
+                    rows={2}
+                    value={collocation.correction_note ?? ""}
+                    onChange={(e) =>
+                      setCollocation({ ...collocation, correction_note: e.target.value || null })
+                    }
+                    placeholder="مثلاً: چرا این باهم‌آیی اصلاح شد یا چه نکته‌ای درباره‌اش مهم است…"
+                  />
+                </Field>
 
                 <button
                   onClick={saveCollocation}
@@ -719,7 +798,9 @@ function CreateCollocationForm({
   const [displayFormTouched, setDisplayFormTouched] = useState(false);
   const [posPattern, setPosPattern] = useState("");
   const [status, setStatus] = useState<"valid" | "corrected">("valid");
+  const [reason, setReason] = useState("");
   const [minmaxScore, setMinmaxScore] = useState("0.5");
+  const [needsReview, setNeedsReview] = useState(false);
   const [examplesList, setExamplesList] = useState<DraftExample[]>([emptyExample()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -789,8 +870,10 @@ function CreateCollocationForm({
         word2: word2.trim() || null,
         display_form: displayForm.trim() || undefined,
         pos_pattern: posPattern.trim() || null,
+        correction_note: reason.trim() || null,
         status,
         minmax_score: minmaxScore.trim() ? Number(minmaxScore) : undefined,
+        needs_review: needsReview,
         examples: cleanExamples,
       } satisfies NewCollocationPayload);
       onCreated(res);
@@ -849,9 +932,24 @@ function CreateCollocationForm({
             />
           </Field>
         </div>
+
+        <Field label="دلیل / یادداشت (اختیاری — برای مرجع خودتان یا ابزارهای دیگر مثل ایجنت)">
+          <textarea
+            className="admin-input"
+            rows={2}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="مثلاً: چرا این باهم‌آیی به‌صورت دستی اضافه شد یا چه نکته‌ای درباره‌اش مهم است…"
+          />
+        </Field>
+        <label className="mt-3 flex items-center gap-2 text-sm text-ink-700">
+          <input type="checkbox" checked={needsReview} onChange={(e) => setNeedsReview(e.target.checked)} />
+          مشکوک است / نیاز به بازبینی دوباره دارد
+        </label>
         <p className="mt-2 text-xs text-ink-400">
           امتیاز کیفیت تعیین می‌کند این باهم‌آیی در کجاهای سایت (صفحه‌ی اصلی، مرور، مرتبط) نمایش داده شود؛ عدد
-          بالاتر یعنی نمایش بیشتر. مقدار پیش‌فرض ۰٫۵ برای یک مورد باکیفیت دستی مناسب است.
+          بالاتر یعنی نمایش بیشتر. معیارهای آماری دیگر (pmi، t_score، llr، logdice، combined_score) نیازی به
+          وارد کردن ندارند — به‌صورت خودکار بر اساس همین عدد ساخته می‌شوند.
         </p>
       </div>
 

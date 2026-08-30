@@ -30,6 +30,8 @@
   --color-success-100: #dcfce7;
   --color-danger-500: #dc2626;
   --color-danger-100: #fee2e2;
+  --color-warning-500: #b45309;
+  --color-warning-100: #fef3c7;
 }
 
 html {

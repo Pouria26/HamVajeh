@@ -27,6 +27,8 @@ CREATE TABLE collocations (
     combined_score  DOUBLE PRECISION,
     minmax_score    DOUBLE PRECISION,
 
+    needs_review    BOOLEAN NOT NULL DEFAULT false, -- admin-set flag: "I edited this but I'm still not fully sure"
+
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

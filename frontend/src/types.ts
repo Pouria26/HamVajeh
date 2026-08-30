@@ -105,6 +105,7 @@ export interface AdminCollocationSummary {
   status: "valid" | "corrected";
   correction_note: string | null;
   minmax_score: number | null;
+  needs_review: boolean;
   example_count: number;
 }
 
@@ -145,6 +146,7 @@ export interface AdminCollocationFull {
   logdice: number | null;
   combined_score: number | null;
   minmax_score: number | null;
+  needs_review: boolean;
 }
 
 export interface AdminCollocationDetailResponse {
@@ -158,6 +160,9 @@ export interface UpdateCollocationPayload {
   display_form?: string;
   pos_pattern?: string | null;
   status?: "valid" | "corrected";
+  minmax_score?: number;
+  needs_review?: boolean;
+  correction_note?: string | null;
 }
 
 export interface UpdateExamplePayload {
@@ -181,11 +186,9 @@ export interface NewCollocationPayload {
   pos_pattern?: string | null;
   status?: "valid" | "corrected";
   correction_note?: string | null;
+  // Single overall quality number (0–1); pmi/t_score/llr/logdice/combined_score
+  // are derived from it server-side, so they're intentionally not here.
   minmax_score?: number;
-  pmi?: number | null;
-  t_score?: number | null;
-  llr?: number | null;
-  logdice?: number | null;
-  combined_score?: number | null;
+  needs_review?: boolean;
   examples?: NewExamplePayload[];
 }

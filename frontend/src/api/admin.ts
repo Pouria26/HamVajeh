@@ -1,4 +1,5 @@
-import { apiClient } from "./client";
+import { apiClient, ApiError } from "./client";
+import { API_BASE_URL } from "../config";
 import type {
   AdminCollocationDetailResponse,
   AdminCollocationListResponse,
@@ -85,4 +86,25 @@ export function reorderAdminExamples(collocationId: number, orderedIds: number[]
     { orderedIds },
     authHeaders()
   );
+}
+
+// CSV export needs the auth header too, so a plain <a href> won't work —
+// fetch the file as a blob and trigger the browser's save dialog manually.
+export async function downloadAdminCsvExport(): Promise<void> {
+  const token = getAdminToken();
+  const res = await fetch(`${API_BASE_URL}/api/admin/export/csv`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError(`export_failed_${res.status}`, res.status);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "hamvajeh_export.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
