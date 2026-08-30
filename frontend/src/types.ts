@@ -90,3 +90,102 @@ export interface CheckAnswerResponse {
   isCorrect: boolean;
   correctAnswer: string;
 }
+
+// ---------------------------------------------------------------------------
+// Admin / curation types
+// ---------------------------------------------------------------------------
+
+export interface AdminCollocationSummary {
+  id: number;
+  pair_id: number;
+  word1: string;
+  word2: string | null;
+  display_form: string;
+  pos_pattern: string | null;
+  status: "valid" | "corrected";
+  correction_note: string | null;
+  minmax_score: number | null;
+  example_count: number;
+}
+
+export interface AdminCollocationListResponse {
+  results: AdminCollocationSummary[];
+  total: number;
+}
+
+export interface AdminExerciseOption {
+  id: number;
+  example_id: number;
+  option_text: string;
+  option_order: number;
+  is_correct: boolean;
+}
+
+export interface AdminExample {
+  id: number;
+  sentence: string;
+  blank_sentence: string | null;
+  target_phrase: string | null;
+  example_order: number;
+  options: AdminExerciseOption[];
+}
+
+export interface AdminCollocationFull {
+  id: number;
+  pair_id: number;
+  word1: string;
+  word2: string | null;
+  display_form: string;
+  pos_pattern: string | null;
+  status: "valid" | "corrected";
+  correction_note: string | null;
+  pmi: number | null;
+  t_score: number | null;
+  llr: number | null;
+  logdice: number | null;
+  combined_score: number | null;
+  minmax_score: number | null;
+}
+
+export interface AdminCollocationDetailResponse {
+  collocation: AdminCollocationFull;
+  examples: AdminExample[];
+}
+
+export interface UpdateCollocationPayload {
+  word1?: string;
+  word2?: string | null;
+  display_form?: string;
+  pos_pattern?: string | null;
+  status?: "valid" | "corrected";
+}
+
+export interface UpdateExamplePayload {
+  sentence?: string;
+  blank_sentence?: string | null;
+  target_phrase?: string | null;
+  options?: { id: number; option_text?: string; is_correct?: boolean }[];
+}
+
+export interface NewExamplePayload {
+  sentence: string;
+  blank_sentence?: string | null;
+  target_phrase?: string | null;
+  options?: { option_text: string; is_correct: boolean }[];
+}
+
+export interface NewCollocationPayload {
+  word1: string;
+  word2?: string | null;
+  display_form?: string;
+  pos_pattern?: string | null;
+  status?: "valid" | "corrected";
+  correction_note?: string | null;
+  minmax_score?: number;
+  pmi?: number | null;
+  t_score?: number | null;
+  llr?: number | null;
+  logdice?: number | null;
+  combined_score?: number | null;
+  examples?: NewExamplePayload[];
+}

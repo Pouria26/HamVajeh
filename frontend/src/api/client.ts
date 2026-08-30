@@ -13,8 +13,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { "Content-Type": "application/json" },
       ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     });
   } catch {
     throw new ApiError("network_error", 0);
@@ -35,7 +35,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const apiClient = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  get: <T>(path: string, headers?: HeadersInit) => request<T>(path, { headers }),
+  post: <T>(path: string, body: unknown, headers?: HeadersInit) =>
+    request<T>(path, { method: "POST", body: JSON.stringify(body), headers }),
+  patch: <T>(path: string, body: unknown, headers?: HeadersInit) =>
+    request<T>(path, { method: "PATCH", body: JSON.stringify(body), headers }),
+  delete: <T>(path: string, headers?: HeadersInit) => request<T>(path, { method: "DELETE", headers }),
 };

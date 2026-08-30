@@ -91,3 +91,39 @@ body {
 .animate-shake {
   animation: shake 0.5s ease-in-out;
 }
+
+/* --- Admin curation panel --- */
+.admin-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-ink-200);
+  background: white;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-ink-900);
+  outline: none;
+  font-family: inherit;
+}
+.admin-input:focus {
+  border-color: var(--color-brand-400);
+}
+.admin-input:disabled {
+  background: var(--color-ink-50);
+  color: var(--color-ink-400);
+}
+.admin-icon-btn {
+  border-radius: 9999px;
+  border: 1px solid var(--color-ink-200);
+  background: white;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-ink-600);
+  transition: background 0.15s;
+}
+.admin-icon-btn:hover:not(:disabled) {
+  background: var(--color-ink-50);
+}
+.admin-icon-btn:disabled {
+  opacity: 0.4;
+}
