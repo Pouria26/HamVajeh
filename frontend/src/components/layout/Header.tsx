@@ -19,7 +19,7 @@ export function Header() {
           هم‌واژه
         </NavLink>
 
-        <nav className="flex items-center gap-1 overflow-x-auto">
+        <nav className="hidden items-center gap-1 overflow-x-auto sm:flex">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

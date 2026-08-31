@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { Header } from "./components/layout/Header";
+import { BottomNav } from "./components/layout/BottomNav";
 import { Footer } from "./components/layout/Footer";
 import { PageContainer } from "./components/layout/PageContainer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -32,6 +33,7 @@ function App() {
           </PageContainer>
         </main>
         <Footer />
+        <BottomNav />
       </div>
     </ErrorBoundary>
   );

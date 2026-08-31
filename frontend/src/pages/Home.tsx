@@ -67,7 +67,7 @@ export function Home() {
 
         <div className="relative mx-auto mt-4 flex max-w-xl flex-wrap items-center justify-center gap-2 text-sm text-brand-50">
           <span className="opacity-80">پیشنهادها:</span>
-          {["تصمیم", "قرار", "سرمایه", "نشان"].map((w) => (
+          {["تصمیم", "قرار", "نشان"].map((w) => (
             <button
               key={w}
               onClick={() => navigate(`/search?q=${encodeURIComponent(w)}`)}
