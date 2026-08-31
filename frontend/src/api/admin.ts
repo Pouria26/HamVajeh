@@ -4,6 +4,7 @@ import type {
   AdminCollocationDetailResponse,
   AdminCollocationListResponse,
   AdminExample,
+  AdminExerciseOption,
   NewCollocationPayload,
   UpdateCollocationPayload,
   UpdateExamplePayload,
@@ -74,6 +75,18 @@ export function deleteAdminCollocation(id: number) {
 
 export function updateAdminExample(id: number, payload: UpdateExamplePayload) {
   return apiClient.patch<{ example: AdminExample }>(`/api/admin/examples/${id}`, payload, authHeaders());
+}
+
+export function addAdminExampleOption(exampleId: number, payload: { option_text: string; is_correct?: boolean }) {
+  return apiClient.post<{ option: AdminExerciseOption }>(
+    `/api/admin/examples/${exampleId}/options`,
+    payload,
+    authHeaders()
+  );
+}
+
+export function deleteAdminExampleOption(optionId: number) {
+  return apiClient.delete<{ deleted: boolean }>(`/api/admin/options/${optionId}`, authHeaders());
 }
 
 export function deleteAdminExample(id: number) {

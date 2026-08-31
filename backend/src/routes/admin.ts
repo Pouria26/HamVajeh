@@ -449,6 +449,75 @@ adminRouter.patch("/examples/:id", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/admin/examples/:id/options -> add one manually-written distractor
+// (or correct option) to an existing example. Supports the fully-manual
+// workflow: type the real sentence + real answer, then just add 2–3 real,
+// meaningful wrong words yourself.
+// ---------------------------------------------------------------------------
+adminRouter.post("/examples/:id/options", async (req: Request, res: Response) => {
+    const exampleId = Number(req.params.id);
+    if (!Number.isInteger(exampleId) || exampleId <= 0) {
+        res.status(400).json({ error: "invalid_id" });
+        return;
+    }
+
+    const optionText = String(req.body?.option_text ?? "").trim();
+    if (!optionText) {
+        res.status(400).json({ error: "option_text_required" });
+        return;
+    }
+    const isCorrect = Boolean(req.body?.is_correct);
+
+    try {
+        const { rows: exampleRows } = await pool.query(`SELECT id FROM examples WHERE id = $1`, [exampleId]);
+        if (exampleRows.length === 0) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+
+        const { rows: maxRows } = await pool.query<{ next_order: number }>(
+            `SELECT COALESCE(MAX(option_order), 0) + 1 AS next_order FROM exercise_options WHERE example_id = $1`,
+            [exampleId]
+        );
+
+        const { rows } = await pool.query(
+            `INSERT INTO exercise_options (example_id, option_text, option_order, is_correct)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, example_id, option_text, option_order, is_correct`,
+            [exampleId, optionText, maxRows[0].next_order, isCorrect]
+        );
+
+        res.status(201).json({ option: rows[0] });
+    } catch (err) {
+        console.error("Admin add option failed:", err);
+        res.status(500).json({ error: "admin_add_option_failed" });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/admin/options/:id -> remove a single distractor/option
+// ---------------------------------------------------------------------------
+adminRouter.delete("/options/:id", async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).json({ error: "invalid_id" });
+        return;
+    }
+
+    try {
+        const { rowCount } = await pool.query(`DELETE FROM exercise_options WHERE id = $1`, [id]);
+        if (rowCount === 0) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json({ deleted: true });
+    } catch (err) {
+        console.error("Admin delete option failed:", err);
+        res.status(500).json({ error: "admin_delete_option_failed" });
+    }
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/admin/examples/:id -> also removes its exercise_options (cascade)
 // ---------------------------------------------------------------------------
 adminRouter.delete("/examples/:id", async (req: Request, res: Response) => {

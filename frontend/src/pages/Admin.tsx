@@ -1,9 +1,11 @@
 import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import {
+  addAdminExampleOption,
   clearAdminToken,
   createAdminCollocation,
   deleteAdminCollocation,
   deleteAdminExample,
+  deleteAdminExampleOption,
   downloadAdminCsvExport,
   getAdminCollocation,
   getAdminToken,
@@ -13,6 +15,7 @@ import {
   updateAdminCollocation,
   updateAdminExample,
 } from "../api/admin";
+import { buildBlankSentence } from "../lib/blankSentence";
 import { ApiError } from "../api/client";
 import { useDebounce } from "../hooks/useDebounce";
 import { Spinner } from "../components/ui/Spinner";
@@ -278,6 +281,50 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
           : { ...e, options: e.options.map((o) => ({ ...o, is_correct: o.id === optionId })) }
       )
     );
+  };
+
+  // Auto-build the blank sentence from the full sentence + the correct
+  // answer already typed in, so the admin doesn't have to hand-type
+  // underscores (and every blank stays the same fixed length).
+  const autoBuildBlank = (example: AdminExample) => {
+    const result = buildBlankSentence(example.sentence, example.target_phrase ?? "");
+    if (!result.matched) {
+      setMessage("متن پاسخ صحیح دقیقاً داخل جمله پیدا نشد — جای خالی به‌صورت خودکار ساخته نشد.");
+      return;
+    }
+    updateExampleField(example.id, "blank_sentence", result.blankSentence);
+  };
+
+  const addOption = async (exampleId: number) => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await addAdminExampleOption(exampleId, { option_text: "", is_correct: false });
+      setExamples((prev) =>
+        prev.map((e) => (e.id === exampleId ? { ...e, options: [...e.options, res.option] } : e))
+      );
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setMessage("خطا در افزودن گزینه.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeOption = async (exampleId: number, optionId: number) => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      await deleteAdminExampleOption(optionId);
+      setExamples((prev) =>
+        prev.map((e) => (e.id !== exampleId ? e : { ...e, options: e.options.filter((o) => o.id !== optionId) }))
+      );
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setMessage("خطا در حذف گزینه.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveExample = async (example: AdminExample) => {
@@ -676,15 +723,7 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
                           onChange={(e) => updateExampleField(example.id, "sentence", e.target.value)}
                         />
                       </Field>
-                      <Field label="جمله با جای خالی">
-                        <textarea
-                          className="admin-input"
-                          rows={2}
-                          value={example.blank_sentence ?? ""}
-                          onChange={(e) => updateExampleField(example.id, "blank_sentence", e.target.value)}
-                        />
-                      </Field>
-                      <Field label="پاسخ صحیح (متن جای خالی)">
+                      <Field label="پاسخ صحیح (دقیقاً همان متنی که داخل جمله‌ی بالا آمده)">
                         <input
                           className="admin-input"
                           value={example.target_phrase ?? ""}
@@ -692,28 +731,72 @@ function AdminPanel({ onLocked }: { onLocked: () => void }) {
                         />
                       </Field>
 
-                      {example.options.length > 0 && (
-                        <div className="mt-2">
-                          <p className="mb-1 text-xs font-semibold text-ink-400">گزینه‌های تمرین</p>
-                          <div className="flex flex-col gap-1.5">
-                            {example.options.map((opt) => (
-                              <label key={opt.id} className="flex items-center gap-2">
-                                <input
-                                  type="radio"
-                                  name={`correct-${example.id}`}
-                                  checked={opt.is_correct}
-                                  onChange={() => setCorrectOption(example.id, opt.id)}
-                                />
-                                <input
-                                  className="admin-input flex-1"
-                                  value={opt.option_text}
-                                  onChange={(e) => updateOptionField(example.id, opt.id, e.target.value)}
-                                />
-                              </label>
-                            ))}
-                          </div>
+                      <div className="mb-3 flex items-end gap-2 last:mb-0">
+                        <div className="flex-1">
+                          <Field label="جمله با جای خالی">
+                            <textarea
+                              className="admin-input"
+                              rows={2}
+                              value={example.blank_sentence ?? ""}
+                              onChange={(e) => updateExampleField(example.id, "blank_sentence", e.target.value)}
+                            />
+                          </Field>
                         </div>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => autoBuildBlank(example)}
+                          className="admin-icon-btn mb-3 shrink-0"
+                          title="جمله را از روی جمله‌ی کامل و پاسخ صحیح بساز"
+                        >
+                          ⚡ ساخت خودکار
+                        </button>
+                      </div>
+
+                      <div className="mt-2">
+                        <div className="mb-1 flex items-center justify-between">
+                          <p className="text-xs font-semibold text-ink-400">
+                            گزینه‌های تمرین (گزینه‌ی درست را با دکمه‌ی رادیویی مشخص کنید)
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => addOption(example.id)}
+                            disabled={saving}
+                            className="admin-icon-btn"
+                          >
+                            + گزینه‌ی غلط
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          {example.options.map((opt) => (
+                            <div key={opt.id} className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name={`correct-${example.id}`}
+                                checked={opt.is_correct}
+                                onChange={() => setCorrectOption(example.id, opt.id)}
+                              />
+                              <input
+                                className="admin-input flex-1"
+                                value={opt.option_text}
+                                onChange={(e) => updateOptionField(example.id, opt.id, e.target.value)}
+                                placeholder={opt.is_correct ? "گزینه‌ی درست" : "یک کلمه یا عبارت واقعی و معنادار"}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeOption(example.id, opt.id)}
+                                disabled={saving}
+                                className="admin-icon-btn shrink-0 text-danger-500"
+                                title="حذف این گزینه"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                          {example.options.length === 0 && (
+                            <p className="text-xs text-ink-400">هنوز هیچ گزینه‌ای اضافه نشده.</p>
+                          )}
+                        </div>
+                      </div>
 
                       <button
                         onClick={() => saveExample(example)}
@@ -779,7 +862,7 @@ function emptyExample(): DraftExample {
     sentence: "",
     blank_sentence: "",
     target_phrase: "",
-    options: [emptyOption(true), emptyOption(), emptyOption(), emptyOption()],
+    options: [emptyOption(true), emptyOption(), emptyOption()],
   };
 }
 
@@ -832,6 +915,36 @@ function CreateCollocationForm({
         e.key !== exampleKey ? e : { ...e, options: e.options.map((o) => ({ ...o, correct: o.key === optionKey })) }
       )
     );
+  };
+
+  const addDraftOption = (exampleKey: string) => {
+    setExamplesList((prev) =>
+      prev.map((e) => {
+        if (e.key !== exampleKey) return e;
+        if (e.options.length >= 4) return e;
+        return { ...e, options: [...e.options, emptyOption()] };
+      })
+    );
+  };
+
+  const removeDraftOption = (exampleKey: string, optionKey: string) => {
+    setExamplesList((prev) =>
+      prev.map((e) =>
+        e.key !== exampleKey ? e : { ...e, options: e.options.filter((o) => o.key !== optionKey) }
+      )
+    );
+  };
+
+  const autoBuildDraftBlank = (exampleKey: string) => {
+    const ex = examplesList.find((e) => e.key === exampleKey);
+    if (!ex) return;
+    const result = buildBlankSentence(ex.sentence, ex.target_phrase);
+    if (!result.matched) {
+      setError("متن پاسخ صحیح دقیقاً داخل جمله پیدا نشد — جای خالی به‌صورت خودکار ساخته نشد.");
+      return;
+    }
+    setError(null);
+    updateExample(exampleKey, { blank_sentence: result.blankSentence });
   };
 
   const addExample = () => {
@@ -991,16 +1104,7 @@ function CreateCollocationForm({
                   placeholder="مثال: او برای پاسخ به سؤالات معلم مورد تشویق قرار گرفت."
                 />
               </Field>
-              <Field label="جمله با جای خالی">
-                <textarea
-                  className="admin-input"
-                  rows={2}
-                  value={ex.blank_sentence}
-                  onChange={(e) => updateExample(ex.key, { blank_sentence: e.target.value })}
-                  placeholder="مثال: او برای پاسخ به سؤالات معلم ___________."
-                />
-              </Field>
-              <Field label="پاسخ صحیح (متن جای خالی)">
+              <Field label="پاسخ صحیح (دقیقاً همان متنی که داخل جمله‌ی بالا آمده)">
                 <input
                   className="admin-input"
                   value={ex.target_phrase}
@@ -1009,13 +1113,45 @@ function CreateCollocationForm({
                 />
               </Field>
 
+              <div className="mb-3 flex items-end gap-2 last:mb-0">
+                <div className="flex-1">
+                  <Field label="جمله با جای خالی">
+                    <textarea
+                      className="admin-input"
+                      rows={2}
+                      value={ex.blank_sentence}
+                      onChange={(e) => updateExample(ex.key, { blank_sentence: e.target.value })}
+                      placeholder="مثال: او برای پاسخ به سؤالات معلم ___________."
+                    />
+                  </Field>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => autoBuildDraftBlank(ex.key)}
+                  className="admin-icon-btn mb-3 shrink-0"
+                  title="جمله را از روی جمله‌ی کامل و پاسخ صحیح بساز"
+                >
+                  ⚡ ساخت خودکار
+                </button>
+              </div>
+
               <div className="mt-2">
-                <p className="mb-1 text-xs font-semibold text-ink-400">
-                  گزینه‌های تمرین (گزینه‌ی درست را با دکمه‌ی رادیویی مشخص کنید)
-                </p>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-ink-400">
+                    گزینه‌های تمرین (گزینه‌ی درست را با دکمه‌ی رادیویی مشخص کنید)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => addDraftOption(ex.key)}
+                    disabled={ex.options.length >= 4}
+                    className="admin-icon-btn"
+                  >
+                    + گزینه‌ی غلط
+                  </button>
+                </div>
                 <div className="flex flex-col gap-1.5">
                   {ex.options.map((opt) => (
-                    <label key={opt.key} className="flex items-center gap-2">
+                    <div key={opt.key} className="flex items-center gap-2">
                       <input
                         type="radio"
                         name={`new-correct-${ex.key}`}
@@ -1026,9 +1162,19 @@ function CreateCollocationForm({
                         className="admin-input flex-1"
                         value={opt.text}
                         onChange={(e) => updateOption(ex.key, opt.key, e.target.value)}
-                        placeholder={opt.correct ? "گزینه‌ی درست" : "گزینه‌ی نادرست"}
+                        placeholder={opt.correct ? "گزینه‌ی درست" : "یک کلمه یا عبارت واقعی و معنادار"}
                       />
-                    </label>
+                      {!opt.correct && (
+                        <button
+                          type="button"
+                          onClick={() => removeDraftOption(ex.key, opt.key)}
+                          className="admin-icon-btn shrink-0 text-danger-500"
+                          title="حذف این گزینه"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
