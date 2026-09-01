@@ -4,6 +4,8 @@ import { BottomNav } from "./components/layout/BottomNav";
 import { Footer } from "./components/layout/Footer";
 import { PageContainer } from "./components/layout/PageContainer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { InstallPrompt } from "./components/InstallPrompt";
+import { UpdateToast } from "./components/UpdateToast";
 import { Home } from "./pages/Home";
 import { Search } from "./pages/Search";
 import { CollocationDetail } from "./pages/CollocationDetail";
@@ -34,6 +36,8 @@ function App() {
         </main>
         <Footer />
         <BottomNav />
+        <InstallPrompt />
+        <UpdateToast />
       </div>
     </ErrorBoundary>
   );
