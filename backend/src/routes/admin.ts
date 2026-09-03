@@ -608,6 +608,119 @@ adminRouter.patch("/collocations/:id/reorder-examples", async (req: Request, res
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/admin/reports?status=pending&limit=&offset=
+// Moderation queue for user-submitted "this looks wrong" reports (created
+// via the public POST /api/collocations/:id/report). Joins in the reported
+// collocation's display form (and example sentence, if the report was about
+// a specific example) so the admin doesn't have to look it up separately.
+// ---------------------------------------------------------------------------
+adminRouter.get("/reports", async (req: Request, res: Response) => {
+    const status = String(req.query.status ?? "").trim(); // "pending" | "resolved" | "dismissed" | ""
+    const parsedLimit = Number(req.query.limit ?? 50);
+    const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 200) : 50;
+    const parsedOffset = Number(req.query.offset ?? 0);
+    const offset = Number.isInteger(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (status === "pending" || status === "resolved" || status === "dismissed") {
+        params.push(status);
+        conditions.push(`r.status = $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    try {
+        params.push(limit);
+        params.push(offset);
+
+        const { rows } = await pool.query(
+            `SELECT r.id, r.collocation_id, r.example_id, r.reason, r.comment, r.status, r.created_at,
+                    c.display_form AS collocation_display_form, c.pair_id AS collocation_pair_id,
+                    e.sentence AS example_sentence
+             FROM reports r
+             JOIN collocations c ON c.id = r.collocation_id
+             LEFT JOIN examples e ON e.id = r.example_id
+             ${whereClause}
+             ORDER BY (r.status = 'pending') DESC, r.created_at DESC
+             LIMIT $${params.length - 1} OFFSET $${params.length}`,
+            params
+        );
+
+        const { rows: countRows } = await pool.query(
+            `SELECT count(*)::int AS total FROM reports r ${whereClause}`,
+            params.slice(0, params.length - 2)
+        );
+
+        const { rows: pendingRows } = await pool.query(
+            `SELECT count(*)::int AS pending FROM reports WHERE status = 'pending'`
+        );
+
+        res.json({ results: rows, total: countRows[0]?.total ?? 0, pending: pendingRows[0]?.pending ?? 0 });
+    } catch (err) {
+        console.error("Admin reports fetch failed:", err);
+        res.status(500).json({ error: "admin_reports_failed" });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/admin/reports/:id -> mark a report resolved / dismissed / pending
+// body: { status: 'pending' | 'resolved' | 'dismissed' }
+// ---------------------------------------------------------------------------
+adminRouter.patch("/reports/:id", async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).json({ error: "invalid_id" });
+        return;
+    }
+
+    const status = String(req.body?.status ?? "").trim();
+    if (status !== "pending" && status !== "resolved" && status !== "dismissed") {
+        res.status(400).json({ error: "invalid_status" });
+        return;
+    }
+
+    try {
+        const { rows } = await pool.query(
+            `UPDATE reports SET status = $1 WHERE id = $2 RETURNING id, collocation_id, example_id, reason, comment, status, created_at`,
+            [status, id]
+        );
+        if (rows.length === 0) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json({ report: rows[0] });
+    } catch (err) {
+        console.error("Admin report update failed:", err);
+        res.status(500).json({ error: "admin_report_update_failed" });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/admin/reports/:id -> remove a report from the queue entirely
+// ---------------------------------------------------------------------------
+adminRouter.delete("/reports/:id", async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).json({ error: "invalid_id" });
+        return;
+    }
+
+    try {
+        const { rowCount } = await pool.query(`DELETE FROM reports WHERE id = $1`, [id]);
+        if (rowCount === 0) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json({ deleted: true });
+    } catch (err) {
+        console.error("Admin report delete failed:", err);
+        res.status(500).json({ error: "admin_report_delete_failed" });
+    }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/admin/export/csv -> full dataset, in the same column layout as
 // the original final_df.csv (plus one trailing needs_review 0/1 column).
 //

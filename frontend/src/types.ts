@@ -7,7 +7,9 @@ export interface CollocationSummary {
 }
 
 export interface PatternCount {
-  pos_pattern: string;
+  category: string;
+  label: string;
+  description: string;
   count: number;
 }
 
@@ -177,6 +179,35 @@ export interface NewExamplePayload {
   blank_sentence?: string | null;
   target_phrase?: string | null;
   options?: { option_text: string; is_correct: boolean }[];
+}
+
+// ---------------------------------------------------------------------------
+// Reports ("این باهم‌آیی/جمله اشتباه است")
+// ---------------------------------------------------------------------------
+
+export type ReportReason = "wrong_collocation" | "wrong_sentence" | "wrong_answer" | "other";
+export type ReportStatus = "pending" | "resolved" | "dismissed";
+
+export interface Report {
+  id: number;
+  collocation_id: number;
+  example_id: number | null;
+  reason: ReportReason;
+  comment: string | null;
+  status: ReportStatus;
+  created_at: string;
+}
+
+export interface AdminReport extends Report {
+  collocation_display_form: string;
+  collocation_pair_id: number;
+  example_sentence: string | null;
+}
+
+export interface AdminReportListResponse {
+  results: AdminReport[];
+  total: number;
+  pending: number;
 }
 
 export interface NewCollocationPayload {

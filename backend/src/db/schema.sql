@@ -2,6 +2,7 @@
 -- Simplified 3-table design for the university project scope.
 -- Auth / progress / SRS tables are intentionally left out for now (future work).
 
+DROP TABLE IF EXISTS reports CASCADE;
 DROP TABLE IF EXISTS exercise_options CASCADE;
 DROP TABLE IF EXISTS examples CASCADE;
 DROP TABLE IF EXISTS collocations CASCADE;
@@ -62,3 +63,20 @@ CREATE TABLE exercise_options (
 );
 
 CREATE INDEX idx_options_example ON exercise_options(example_id);
+
+-- User-submitted reports: "this collocation / this example sentence looks
+-- wrong". Anyone can create one (no auth); only the admin panel can read,
+-- update, or resolve them, so this is purely a write channel from the
+-- public app into the curation queue.
+CREATE TABLE reports (
+    id              SERIAL PRIMARY KEY,
+    collocation_id  INTEGER NOT NULL REFERENCES collocations(id) ON DELETE CASCADE,
+    example_id      INTEGER REFERENCES examples(id) ON DELETE CASCADE, -- null: report is about the collocation itself
+    reason          TEXT NOT NULL,   -- short category, e.g. 'wrong_collocation' | 'wrong_sentence' | 'wrong_answer' | 'other'
+    comment         TEXT,            -- optional free-text detail from the reporter
+    status          TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'resolved' | 'dismissed'
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_reports_collocation ON reports(collocation_id);

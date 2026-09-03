@@ -5,6 +5,7 @@ import { recordExerciseAttempt } from "../lib/localHistory";
 import { ExerciseQuestion } from "../components/ExerciseQuestion";
 import { Spinner } from "../components/ui/Spinner";
 import { EmptyState, ErrorState } from "../components/ui/States";
+import { ReportModal, ReportTrigger } from "../components/ReportModal";
 import type { CollocationExercise, RandomExerciseResponse } from "../types";
 
 export function Exercise() {
@@ -22,6 +23,7 @@ function RandomExerciseMode() {
   const [status, setStatus] = useState<"loading" | "error" | "done">("loading");
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const [key, setKey] = useState(0); // forces ExerciseQuestion to remount for a fresh question
+  const [reporting, setReporting] = useState(false);
 
   const load = async () => {
     setStatus("loading");
@@ -79,7 +81,18 @@ function RandomExerciseMode() {
           >
             تمرین بعدی ←
           </button>
+          <div className="mt-3">
+            <ReportTrigger onClick={() => setReporting(true)} label="گزارش خطا در این سؤال" />
+          </div>
         </div>
+      )}
+
+      {reporting && current && (
+        <ReportModal
+          collocationId={current.collocationId}
+          exampleId={current.exampleId}
+          onClose={() => setReporting(false)}
+        />
       )}
     </div>
   );
@@ -90,6 +103,7 @@ function CollocationExerciseSet({ collocationId }: { collocationId: string }) {
   const [status, setStatus] = useState<"loading" | "error" | "done">("loading");
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -179,6 +193,17 @@ function CollocationExerciseSet({ collocationId }: { collocationId: string }) {
       >
         {index + 1 === exercises.length ? "پایان تمرین" : "سؤال بعدی ←"}
       </button>
+      <div className="mt-3">
+        <ReportTrigger onClick={() => setReporting(true)} label="گزارش خطا در این سؤال" />
+      </div>
+
+      {reporting && (
+        <ReportModal
+          collocationId={Number(collocationId)}
+          exampleId={current.exampleId}
+          onClose={() => setReporting(false)}
+        />
+      )}
     </div>
   );
 }

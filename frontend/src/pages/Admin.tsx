@@ -15,6 +15,7 @@ import {
   updateAdminCollocation,
   updateAdminExample,
 } from "../api/admin";
+import { deleteAdminReport, listAdminReports, updateAdminReportStatus } from "../api/reports";
 import { buildBlankSentence } from "../lib/blankSentence";
 import { ApiError } from "../api/client";
 import { useDebounce } from "../hooks/useDebounce";
@@ -24,6 +25,7 @@ import type {
   AdminCollocationSummary,
   AdminCollocationFull,
   AdminExample,
+  AdminReport,
   NewCollocationPayload,
 } from "../types";
 
@@ -114,9 +116,76 @@ function LoginGate({ onUnlocked }: { onUnlocked: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// The actual curation panel, only reachable after LoginGate succeeds.
+// Top-level tab switcher between the dataset curation panel and the incoming
+// user-reports queue. Kept as a thin wrapper so each panel's large amount of
+// local state stays independent and simple.
 // ---------------------------------------------------------------------------
 function AdminPanel({ onLocked }: { onLocked: () => void }) {
+  const [tab, setTab] = useState<"dataset" | "reports">("dataset");
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = () => {
+      listAdminReports({ status: "pending", limit: 1 })
+        .then((res) => {
+          if (!cancelled) setPendingCount(res.pending);
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center gap-2 rounded-2xl border border-ink-100 bg-white p-1.5">
+        <button
+          onClick={() => setTab("dataset")}
+          className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+            tab === "dataset" ? "bg-brand-500 text-white shadow-sm" : "text-ink-600 hover:bg-ink-50"
+          }`}
+        >
+          🗂️ مدیریت دیتاست
+        </button>
+        <button
+          onClick={() => setTab("reports")}
+          className={`relative flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+            tab === "reports" ? "bg-brand-500 text-white shadow-sm" : "text-ink-600 hover:bg-ink-50"
+          }`}
+        >
+          🚩 گزارش‌های کاربران
+          {!!pendingCount && (
+            <span
+              className={`mr-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${
+                tab === "reports" ? "bg-white/25 text-white" : "bg-danger-500 text-white"
+              }`}
+            >
+              {pendingCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {tab === "dataset" ? (
+        <DatasetPanel onLocked={onLocked} />
+      ) : (
+        <ReportsPanel onLocked={onLocked} onPendingChange={setPendingCount} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The actual dataset curation panel, only reachable after LoginGate succeeds.
+// ---------------------------------------------------------------------------
+function DatasetPanel({ onLocked }: { onLocked: () => void }) {
   // --- list state -----------------------------------------------------
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
@@ -1202,5 +1271,227 @@ function CreateCollocationForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reports panel — moderation queue for "این باهم‌آیی/جمله اشتباه است" reports
+// submitted by learners on the public site. Lets the admin filter by status,
+// jump to the reported collocation, and mark reports resolved/dismissed.
+// ---------------------------------------------------------------------------
+const REPORT_REASON_LABELS: Record<string, string> = {
+  wrong_collocation: "باهم‌آیی طبیعی/درست نیست",
+  wrong_sentence: "جمله‌ی نمونه غلط است",
+  wrong_answer: "گزینه‌های تمرین اشتباه است",
+  other: "چیز دیگری",
+};
+
+const REPORT_STATUS_LABELS: Record<string, string> = {
+  pending: "در انتظار بررسی",
+  resolved: "برطرف‌شده",
+  dismissed: "رد شده",
+};
+
+function ReportsPanel({
+  onLocked,
+  onPendingChange,
+}: {
+  onLocked: () => void;
+  onPendingChange: (n: number) => void;
+}) {
+  const [statusFilter, setStatusFilter] = useState<"" | "pending" | "resolved" | "dismissed">("pending");
+  const [results, setResults] = useState<AdminReport[]>([]);
+  const [total, setTotal] = useState(0);
+  const [status, setStatus] = useState<"loading" | "error" | "done">("loading");
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const handleAuthError = (err: unknown): boolean => {
+    if (err instanceof ApiError && err.status === 401) {
+      clearAdminToken();
+      onLocked();
+      return true;
+    }
+    return false;
+  };
+
+  const load = async () => {
+    setStatus("loading");
+    try {
+      const res = await listAdminReports({ status: statusFilter, limit: 100 });
+      setResults(res.results);
+      setTotal(res.total);
+      onPendingChange(res.pending);
+      setStatus("done");
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
+
+  const setReportStatus = async (id: number, newStatus: "pending" | "resolved" | "dismissed") => {
+    setBusyId(id);
+    try {
+      await updateAdminReportStatus(id, newStatus);
+      // Optimistically remove it from the current filtered view (unless we're
+      // viewing "all", in which case just update its status in place).
+      setResults((prev) =>
+        statusFilter === ""
+          ? prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+          : prev.filter((r) => r.id !== id)
+      );
+      setTotal((t) => (statusFilter === "" ? t : Math.max(0, t - 1)));
+      listAdminReports({ status: "pending", limit: 1 })
+        .then((res) => onPendingChange(res.pending))
+        .catch(() => {});
+    } catch (err) {
+      if (handleAuthError(err)) return;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const removeReport = async (id: number) => {
+    if (!window.confirm("این گزارش برای همیشه حذف شود؟")) return;
+    setBusyId(id);
+    try {
+      await deleteAdminReport(id);
+      setResults((prev) => prev.filter((r) => r.id !== id));
+      setTotal((t) => Math.max(0, t - 1));
+    } catch (err) {
+      if (handleAuthError(err)) return;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h1 className="mb-2 text-2xl font-bold text-ink-900">گزارش‌های کاربران</h1>
+        <p className="text-sm text-ink-500">
+          مواردی که کاربران به‌عنوان باهم‌آیی یا جمله‌ی اشتباه گزارش کرده‌اند.
+        </p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {(["pending", "resolved", "dismissed", ""] as const).map((s) => (
+          <button
+            key={s || "all"}
+            onClick={() => setStatusFilter(s)}
+            className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
+              statusFilter === s
+                ? "border-brand-500 bg-brand-500 text-white"
+                : "border-ink-200 bg-white text-ink-600 hover:border-brand-300"
+            }`}
+          >
+            {s === "" ? "همه" : REPORT_STATUS_LABELS[s]}
+          </button>
+        ))}
+        <span className="mr-auto text-xs text-ink-400">{total} مورد</span>
+      </div>
+
+      {status === "loading" && (
+        <div className="flex justify-center py-16">
+          <Spinner className="h-6 w-6 text-brand-500" />
+        </div>
+      )}
+
+      {status === "error" && <ErrorState onRetry={load} />}
+
+      {status === "done" && results.length === 0 && (
+        <EmptyState icon="🎉" title="گزارشی در این دسته نیست" />
+      )}
+
+      {status === "done" && results.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {results.map((r) => (
+            <li
+              key={r.id}
+              className="rounded-2xl border border-ink-100 bg-white p-4 shadow-sm sm:p-5"
+            >
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <a
+                  href={`/collocation/${r.collocation_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-brand-700 hover:underline"
+                >
+                  {r.collocation_display_form}
+                </a>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    r.status === "pending"
+                      ? "bg-amber-100 text-amber-700"
+                      : r.status === "resolved"
+                        ? "bg-success-100 text-success-700"
+                        : "bg-ink-100 text-ink-500"
+                  }`}
+                >
+                  {REPORT_STATUS_LABELS[r.status]}
+                </span>
+              </div>
+
+              <p className="mb-1 text-sm font-medium text-ink-700">
+                {REPORT_REASON_LABELS[r.reason] ?? r.reason}
+              </p>
+
+              {r.example_sentence && (
+                <p className="mb-2 rounded-lg bg-ink-50 p-2.5 text-sm leading-7 text-ink-600">
+                  «{r.example_sentence}»
+                </p>
+              )}
+
+              {r.comment && <p className="mb-2 text-sm text-ink-600">توضیح کاربر: {r.comment}</p>}
+
+              <p className="mb-3 text-xs text-ink-400">
+                {new Date(r.created_at).toLocaleString("fa-IR")}
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                {r.status !== "resolved" && (
+                  <button
+                    onClick={() => setReportStatus(r.id, "resolved")}
+                    disabled={busyId === r.id}
+                    className="rounded-full bg-success-500 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-success-600 disabled:opacity-50"
+                  >
+                    ✓ برطرف شد
+                  </button>
+                )}
+                {r.status !== "dismissed" && (
+                  <button
+                    onClick={() => setReportStatus(r.id, "dismissed")}
+                    disabled={busyId === r.id}
+                    className="rounded-full border border-ink-200 bg-white px-4 py-1.5 text-xs font-semibold text-ink-600 transition hover:border-ink-300 disabled:opacity-50"
+                  >
+                    رد کردن
+                  </button>
+                )}
+                {r.status !== "pending" && (
+                  <button
+                    onClick={() => setReportStatus(r.id, "pending")}
+                    disabled={busyId === r.id}
+                    className="rounded-full border border-ink-200 bg-white px-4 py-1.5 text-xs font-semibold text-ink-600 transition hover:border-ink-300 disabled:opacity-50"
+                  >
+                    بازگرداندن به در انتظار
+                  </button>
+                )}
+                <button
+                  onClick={() => removeReport(r.id)}
+                  disabled={busyId === r.id}
+                  className="mr-auto rounded-full px-4 py-1.5 text-xs font-semibold text-danger-500 transition hover:bg-danger-50 disabled:opacity-50"
+                >
+                  حذف گزارش
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

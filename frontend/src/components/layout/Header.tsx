@@ -13,9 +13,7 @@ export function Header() {
     <header className="sticky top-0 z-20 border-b border-ink-100 bg-white/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
         <NavLink to="/" className="flex items-center gap-2 text-xl font-extrabold text-brand-600">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-500 text-white">
-            هم
-          </span>
+          <img src="/favicon.svg" alt="" className="h-9 w-9 shrink-0" />
           هم‌واژه
         </NavLink>
 

@@ -7,6 +7,7 @@ import { ScoreBadge } from "../components/ScoreBadge";
 import { CollocationCard } from "../components/CollocationCard";
 import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
+import { ReportModal, ReportTrigger } from "../components/ReportModal";
 import { patternLabel } from "../lib/patternLabels";
 import type { CollocationDetailResponse, CollocationSummary } from "../types";
 
@@ -17,6 +18,10 @@ export function CollocationDetail() {
 
   const [related, setRelated] = useState<CollocationSummary[]>([]);
   const [relatedStatus, setRelatedStatus] = useState<"loading" | "error" | "done">("loading");
+
+  // undefined: closed. { exampleId: undefined }: reporting the collocation
+  // itself. { exampleId: N }: reporting one specific example sentence.
+  const [reportTarget, setReportTarget] = useState<{ exampleId?: number } | null>(null);
 
   const load = async () => {
     if (!id) return;
@@ -101,12 +106,15 @@ export function CollocationDetail() {
           )}
         </div>
 
-        <Link
-          to={`/exercise?collocationId=${collocation.id}`}
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-brand-500 px-6 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0"
-        >
-          ✍️ تمرین همین باهم‌آیی
-        </Link>
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <Link
+            to={`/exercise?collocationId=${collocation.id}`}
+            className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-6 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0"
+          >
+            ✍️ تمرین همین باهم‌آیی
+          </Link>
+          <ReportTrigger onClick={() => setReportTarget({})} label="گزارش خطا در این باهم‌آیی" />
+        </div>
       </div>
 
       <div className="mt-8">
@@ -116,7 +124,12 @@ export function CollocationDetail() {
         ) : (
           <ul className="flex flex-col gap-3">
             {examples.map((ex) => (
-              <ExampleCard key={ex.id} index={ex.example_order} sentence={ex.sentence} />
+              <ExampleCard
+                key={ex.id}
+                index={ex.example_order}
+                sentence={ex.sentence}
+                onReport={() => setReportTarget({ exampleId: ex.id })}
+              />
             ))}
           </ul>
         )}
@@ -137,6 +150,14 @@ export function CollocationDetail() {
             </div>
           )}
         </div>
+      )}
+
+      {reportTarget && (
+        <ReportModal
+          collocationId={collocation.id}
+          exampleId={reportTarget.exampleId}
+          onClose={() => setReportTarget(null)}
+        />
       )}
     </div>
   );

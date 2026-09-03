@@ -12,7 +12,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         id: '/',
-        name: 'هم‌واژه | آموزش باهم‌آیی‌های فارسی',
+        name: 'هم‌واژه',
         short_name: 'هم‌واژه',
         description: 'سامانه‌ی هوشمند آموزش باهم‌آیی‌های زبان فارسی به زبان‌آموزان غیرفارسی‌زبان',
         lang: 'fa',
