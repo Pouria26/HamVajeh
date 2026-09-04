@@ -93,7 +93,14 @@ async function main() {
             const word1 = (row.word1_final || row.word1_orig || "").trim();
             const word2raw = (row.word2_final || "").trim();
             const word2 = word2raw === "" ? null : word2raw;
-            const displayForm = buildDisplayForm(word1, word2);
+            // Prefer an explicit display_form column when present (this is how
+            // the admin panel's CSV export round-trips custom display forms —
+            // see backend/src/routes/admin.ts's /export/csv). The original
+            // final_df.csv never had this column, so for that file (or any
+            // row where it's blank) we fall back to auto-building it from the
+            // words, same as before.
+            const displayFormFromCsv = (row.display_form || "").trim();
+            const displayForm = displayFormFromCsv || buildDisplayForm(word1, word2);
 
             const collocationInsert = await client.query<{ id: number }>(
                 `INSERT INTO collocations

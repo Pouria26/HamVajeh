@@ -721,8 +721,22 @@ adminRouter.delete("/reports/:id", async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/admin/export/csv -> full dataset, in the same column layout as
-// the original final_df.csv (plus one trailing needs_review 0/1 column).
+// GET /api/admin/export/csv -> full dataset, in (almost) the same column
+// layout as the original final_df.csv: all the original columns are kept in
+// their original order, plus two additions — "display_form" (inserted right
+// after word2_final) and a trailing "needs_review" 0/1 column.
+//
+// display_form matters here because it's the one field an admin can edit
+// that ISN'T simply derived from word1/word2 (e.g. fixing spacing, ZWNJ
+// placement, or word order that the automatic "word1 word2" join gets
+// wrong). Without exporting it, re-importing this CSV via
+// `npm run import-csv` would silently regenerate display_form from
+// word1_final/word2_final and any such manual fix would be lost — which
+// is exactly the "have to redo everything from scratch" bug this column
+// fixes. importDataset.ts reads this column back in and only falls back to
+// auto-building it when the column is blank/absent (e.g. for the original
+// final_df.csv, which never had it), so re-importing an export you haven't
+// touched still behaves identically to before.
 //
 // Caveat: the source columns word1_orig/word2_orig captured the pre-edit
 // spelling from the original corpus run. We don't keep a separate "before
@@ -738,6 +752,7 @@ const CSV_COLUMNS = [
     "status",
     "word1_final",
     "word2_final",
+    "display_form",
     "reason",
     "pmi",
     "t_score",
@@ -816,6 +831,7 @@ adminRouter.get("/export/csv", async (_req: Request, res: Response) => {
                 status: c.status,
                 word1_final: c.word1,
                 word2_final: c.word2 ?? "",
+                display_form: c.display_form ?? "",
                 reason: c.correction_note ?? "",
                 pmi: c.pmi ?? "",
                 t_score: c.t_score ?? "",
