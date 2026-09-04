@@ -1,10 +1,19 @@
 // Groups the dataset's raw pos_pattern values (e.g. "NOUN+NOUN", "ADJ+VERB")
-// into a fixed set of 5 broad, learner-facing categories for the "Browse"
+// into a fixed set of 4 broad, learner-facing categories for the "Browse"
 // page. The raw patterns are numerous (~24 distinct values) and many are
 // near-duplicates or tiny long-tail buckets, so a flat list of them makes a
-// poor navigation UI. These 5 categories were chosen by looking at the
-// actual distribution of pos_pattern across the dataset and grouping by
-// linguistic role rather than raw POS-tag combination.
+// poor navigation UI. These categories were chosen by looking at the actual
+// distribution of pos_pattern across the dataset and grouping by linguistic
+// role rather than raw POS-tag combination.
+//
+// A 5th category ("ترکیب با حرف اضافه" / preposition phrases) originally
+// existed on its own, but with only a handful of matching rows it read as
+// an oddly empty tab next to the big categories — so its patterns were
+// folded into "سایر ترکیب‌ها" (OTHER), which already exists as the
+// catch-all for every long-tail pattern. Net effect: 4 categories shown
+// instead of 5, and OTHER absorbs the preposition patterns automatically
+// (see categoryForPattern's fallback below) without needing to list them
+// explicitly.
 //
 // IMPORTANT: keep this file and the frontend's copy
 // (frontend/src/lib/patternCategories.ts) in sync — the category ids and
@@ -38,15 +47,10 @@ export const PATTERN_CATEGORIES: PatternCategory[] = [
         patterns: ["NOUN+VERB", "VERB+NOUN", "PROPN+VERB", "VERB+PROPN", "ADJ+VERB", "ADV+VERB", "VERB"],
     },
     {
-        id: "PREP_PHRASE",
-        label: "ترکیب با حرف اضافه",
-        description: "باهم‌آیی‌هایی که با یک حرف اضافه همراه می‌شوند (مثل «وارد گفتگو»).",
-        patterns: ["NOUN+ADP", "ADP+NOUN", "ADJ+ADP", "ADP+ADJ", "ADP+VERB", "VERB+ADP"],
-    },
-    {
         id: "OTHER",
         label: "سایر ترکیب‌ها",
-        description: "الگوهای کم‌تکرار دیگری که در دسته‌های بالا نمی‌گنجند.",
+        description:
+            "الگوهای کم‌تکرار دیگری که در دسته‌های بالا نمی‌گنجند؛ از جمله ترکیب‌های همراه با حرف اضافه (مثل «وارد گفتگو»).",
         patterns: [], // catch-all — filled in dynamically below
     },
 ];

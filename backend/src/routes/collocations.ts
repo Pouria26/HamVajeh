@@ -20,7 +20,7 @@ const FEATURED_QUALITY_THRESHOLD = 0.4;
 const FEATURED_SHOWCASE_THRESHOLD = 0.6;
 // BROWSE: same lenient bar as RELATED — this is a showcase/discovery feature,
 // so it should feel populated per category while still excluding pure noise.
-const BROWSE_QUALITY_THRESHOLD = 0.2;
+const BROWSE_QUALITY_THRESHOLD = 0.15;
 
 // GET /api/collocations/search?q=قرار&limit=20
 // Intentionally NOT quality-filtered: the learner should be able to find and see

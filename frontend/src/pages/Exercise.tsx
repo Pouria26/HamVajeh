@@ -82,7 +82,7 @@ function RandomExerciseMode() {
             تمرین بعدی ←
           </button>
           <div className="mt-3">
-            <ReportTrigger onClick={() => setReporting(true)} label="گزارش خطا در این سؤال" />
+            <ReportTrigger onClick={() => setReporting(true)} label="گزارش خطا در این سؤال" variant="outline" />
           </div>
         </div>
       )}
@@ -194,7 +194,7 @@ function CollocationExerciseSet({ collocationId }: { collocationId: string }) {
         {index + 1 === exercises.length ? "پایان تمرین" : "سؤال بعدی ←"}
       </button>
       <div className="mt-3">
-        <ReportTrigger onClick={() => setReporting(true)} label="گزارش خطا در این سؤال" />
+        <ReportTrigger onClick={() => setReporting(true)} label="گزارش خطا در این سؤال" variant="outline" />
       </div>
 
       {reporting && (

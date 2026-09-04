@@ -113,7 +113,7 @@ export function CollocationDetail() {
           >
             ✍️ تمرین همین باهم‌آیی
           </Link>
-          <ReportTrigger onClick={() => setReportTarget({})} label="گزارش خطا در این باهم‌آیی" />
+          <ReportTrigger onClick={() => setReportTarget({})} label="گزارش خطا در این باهم‌آیی" variant="outline" />
         </div>
       </div>
 
