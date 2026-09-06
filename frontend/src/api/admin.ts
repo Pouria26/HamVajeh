@@ -35,18 +35,27 @@ function authHeaders(): HeadersInit {
 export function listAdminCollocations(opts: {
   search?: string;
   status?: string;
+  needsReviewOnly?: boolean;
   limit?: number;
   offset?: number;
 }) {
   const params = new URLSearchParams();
   if (opts.search) params.set("search", opts.search);
   if (opts.status) params.set("status", opts.status);
+  if (opts.needsReviewOnly) params.set("needs_review", "1");
   params.set("limit", String(opts.limit ?? 50));
   params.set("offset", String(opts.offset ?? 0));
   return apiClient.get<AdminCollocationListResponse>(
     `/api/admin/collocations?${params.toString()}`,
     authHeaders()
   );
+}
+
+// Bulk-clears the needs_review flag on every currently-flagged row (used by
+// the "پاک کردن همه" action on the "مشکوک" tab — e.g. right after importing
+// a raw CSV where every row starts out flagged).
+export function clearAllNeedsReview() {
+  return apiClient.post<{ cleared: number }>(`/api/admin/collocations/clear-needs-review`, {}, authHeaders());
 }
 
 export function getAdminCollocation(id: number) {

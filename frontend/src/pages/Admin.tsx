@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import {
   addAdminExampleOption,
   clearAdminToken,
+  clearAllNeedsReview,
   createAdminCollocation,
   deleteAdminCollocation,
   deleteAdminExample,
@@ -189,9 +190,11 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
   // --- list state -----------------------------------------------------
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
-  const [statusFilter, setStatusFilter] = useState<"" | "valid" | "corrected">("");
+  const [statusFilter, setStatusFilter] = useState<"" | "valid" | "corrected" | "needs_review">("");
   const [results, setResults] = useState<AdminCollocationSummary[]>([]);
   const [total, setTotal] = useState(0);
+  const [needsReviewTotal, setNeedsReviewTotal] = useState(0);
+  const [bulkClearing, setBulkClearing] = useState(false);
   const [offset, setOffset] = useState(0);
   const [listStatus, setListStatus] = useState<"loading" | "error" | "done">("loading");
 
@@ -226,12 +229,14 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
     try {
       const res = await listAdminCollocations({
         search: debouncedSearch,
-        status: statusFilter,
+        status: statusFilter === "needs_review" ? "" : statusFilter,
+        needsReviewOnly: statusFilter === "needs_review",
         limit: PAGE_SIZE,
         offset: nextOffset,
       });
       setResults((prev) => (nextOffset === 0 ? res.results : [...prev, ...res.results]));
       setTotal(res.total);
+      setNeedsReviewTotal(res.needsReviewTotal);
       setOffset(nextOffset);
       setListStatus("done");
     } catch (err) {
@@ -263,6 +268,68 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
 
   const refreshListRow = (updated: Partial<AdminCollocationSummary> & { id: number }) => {
     setResults((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+  };
+
+  // Quick actions for the list rows — clear the "مشکوک" flag or delete a
+  // row directly from the list, without opening the full edit panel. Lets
+  // the admin power through a big "مشکوک" queue (e.g. right after an import)
+  // much faster than open → edit → save for each one.
+  const quickClearNeedsReview = async (id: number) => {
+    try {
+      await updateAdminCollocation(id, { needs_review: false });
+      setNeedsReviewTotal((n) => Math.max(0, n - 1));
+      if (statusFilter === "needs_review") {
+        setResults((prev) => prev.filter((r) => r.id !== id));
+        setTotal((t) => Math.max(0, t - 1));
+      } else {
+        refreshListRow({ id, needs_review: false });
+      }
+      if (collocation?.id === id) setCollocation({ ...collocation, needs_review: false });
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setMessage("خطا در بروزرسانی علامت.");
+    }
+  };
+
+  const quickDelete = async (id: number, label: string) => {
+    if (!window.confirm(`«${label}» برای همیشه حذف شود؟`)) return;
+    try {
+      await deleteAdminCollocation(id);
+      setResults((prev) => prev.filter((r) => r.id !== id));
+      setTotal((t) => Math.max(0, t - 1));
+      setNeedsReviewTotal((n) => Math.max(0, n - (results.find((r) => r.id === id)?.needs_review ? 1 : 0)));
+      if (selectedId === id) {
+        setSelectedId(null);
+        setCollocation(null);
+        setDetailStatus("idle");
+      }
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setMessage("خطا در حذف.");
+    }
+  };
+
+  const bulkClearNeedsReview = async () => {
+    if (needsReviewTotal === 0) return;
+    if (!window.confirm(`علامت «مشکوک» از تمام ${needsReviewTotal} مورد پاک شود؟ این کار قابل بازگشت نیست.`)) return;
+    setBulkClearing(true);
+    try {
+      const res = await clearAllNeedsReview();
+      setNeedsReviewTotal(0);
+      if (statusFilter === "needs_review") {
+        setResults([]);
+        setTotal(0);
+      } else {
+        setResults((prev) => prev.map((r) => ({ ...r, needs_review: false })));
+      }
+      if (collocation) setCollocation({ ...collocation, needs_review: false });
+      setMessage(`علامت «مشکوک» از ${res.cleared} مورد پاک شد.`);
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setMessage("خطا در پاک‌کردن انبوه.");
+    } finally {
+      setBulkClearing(false);
+    }
   };
 
   const saveCollocation = async () => {
@@ -540,62 +607,119 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
               placeholder="جستجو در واژه یا شکل نمایشی…"
               className="admin-input"
             />
-            <div className="flex gap-2">
-              {(["", "valid", "corrected"] as const).map((s) => (
+            <div className="flex flex-wrap gap-2">
+              {(["", "valid", "corrected", "needs_review"] as const).map((s) => (
                 <button
                   key={s || "all"}
                   onClick={() => setStatusFilter(s)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                  className={`relative rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     statusFilter === s
-                      ? "border-brand-500 bg-brand-500 text-white"
+                      ? s === "needs_review"
+                        ? "border-warning-500 bg-warning-500 text-white"
+                        : "border-brand-500 bg-brand-500 text-white"
                       : "border-ink-200 bg-white text-ink-600 hover:border-brand-300"
                   }`}
                 >
-                  {s === "" ? "همه" : s === "valid" ? "معتبر" : "اصلاح‌شده"}
+                  {s === "" ? "همه" : s === "valid" ? "معتبر" : s === "corrected" ? "اصلاح‌شده" : "⚠ مشکوک"}
+                  {s === "needs_review" && needsReviewTotal > 0 && (
+                    <span
+                      className={`mr-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+                        statusFilter === "needs_review" ? "bg-white/25 text-white" : "bg-warning-500 text-white"
+                      }`}
+                    >
+                      {needsReviewTotal}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
-            <p className="text-xs text-ink-400">{total} مورد</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-ink-400">{total} مورد</p>
+              {statusFilter === "needs_review" && needsReviewTotal > 0 && (
+                <button
+                  onClick={bulkClearNeedsReview}
+                  disabled={bulkClearing}
+                  className="rounded-full border border-warning-500 bg-warning-100 px-3 py-1 text-[11px] font-semibold text-warning-500 transition hover:bg-warning-500 hover:text-white disabled:opacity-50"
+                >
+                  {bulkClearing ? "در حال پاک‌کردن…" : "پاک‌کردن همه‌ی علامت‌ها"}
+                </button>
+              )}
+            </div>
           </div>
 
           {listStatus === "error" && <ErrorState onRetry={() => loadList(0)} />}
-          {listStatus === "done" && results.length === 0 && <EmptyState icon="🔍" title="چیزی یافت نشد" />}
+          {listStatus === "done" && results.length === 0 && (
+            <EmptyState
+              icon={statusFilter === "needs_review" ? "🎉" : "🔍"}
+              title={statusFilter === "needs_review" ? "هیچ موردی مشکوک نیست" : "چیزی یافت نشد"}
+            />
+          )}
 
           <div className="flex max-h-[70vh] flex-col gap-1.5 overflow-y-auto rounded-2xl border border-ink-100 bg-white p-2">
             {results.map((r) => (
-              <button
+              <div
                 key={r.id}
-                onClick={() => openItem(r.id)}
-                className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-right transition ${
+                className={`flex items-center gap-1 rounded-xl transition ${
                   selectedId === r.id ? "bg-brand-100 text-brand-800" : "hover:bg-ink-50"
                 }`}
               >
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-semibold text-ink-900">{r.display_form}</span>
-                  <span className="text-xs text-ink-400">
-                    #{r.id} · {r.pos_pattern ?? "—"} · {r.example_count} جمله
-                  </span>
-                </span>
-                <span
-                  className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                    r.status === "valid" ? "bg-success-100 text-success-500" : "bg-brand-100 text-brand-700"
-                  }`}
+                <button
+                  onClick={() => openItem(r.id)}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-right"
                 >
-                  {r.status === "valid" ? "معتبر" : "اصلاح‌شده"}
-                </span>
-                {r.needs_review && (
-                  <span
-                    title="نیاز به بازبینی"
-                    className="shrink-0 rounded-md bg-warning-100 px-2 py-0.5 text-[11px] font-medium text-warning-500"
-                  >
-                    ⚠ مشکوک
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-semibold text-ink-900">{r.display_form}</span>
+                    <span className="text-xs text-ink-400">
+                      #{r.id} · {r.pos_pattern ?? "—"} · {r.example_count} جمله
+                    </span>
                   </span>
+                  <span
+                    className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                      r.status === "valid" ? "bg-success-100 text-success-500" : "bg-brand-100 text-brand-700"
+                    }`}
+                  >
+                    {r.status === "valid" ? "معتبر" : "اصلاح‌شده"}
+                  </span>
+                  {r.needs_review && (
+                    <span
+                      title="نیاز به بازبینی"
+                      className="shrink-0 rounded-md bg-warning-100 px-2 py-0.5 text-[11px] font-medium text-warning-500"
+                    >
+                      ⚠ مشکوک
+                    </span>
+                  )}
+                </button>
+
+                {r.needs_review && (
+                  <div className="flex shrink-0 items-center gap-0.5 pl-1.5">
+                    <button
+                      title="بررسی شد — پاک‌کردن علامت"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        quickClearNeedsReview(r.id);
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-success-500 transition hover:bg-success-100"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      title="حذف"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        quickDelete(r.id, r.display_form);
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-danger-500 transition hover:bg-danger-100"
+                    >
+                      🗑
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
             ))}
             {listStatus === "loading" && (
               <div className="flex justify-center py-4">
                 <Spinner className="h-5 w-5 text-brand-500" />
+
               </div>
             )}
           </div>

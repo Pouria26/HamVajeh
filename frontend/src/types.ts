@@ -114,6 +114,7 @@ export interface AdminCollocationSummary {
 export interface AdminCollocationListResponse {
   results: AdminCollocationSummary[];
   total: number;
+  needsReviewTotal: number;
 }
 
 export interface AdminExerciseOption {

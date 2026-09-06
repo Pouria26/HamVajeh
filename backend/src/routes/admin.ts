@@ -5,12 +5,19 @@ import { deriveScoresFromQuality } from "../lib/scoreDerivation";
 export const adminRouter = Router();
 
 // ---------------------------------------------------------------------------
-// GET /api/admin/collocations?search=&status=&limit=&offset=
+// GET /api/admin/collocations?search=&status=&needs_review=1&limit=&offset=
 // Full unfiltered listing (no quality threshold) for dataset curation.
+//
+// `status` and `needs_review` are independent filters (status is the
+// valid/corrected curation outcome; needs_review is a separate "flagged for
+// a second look" marker an admin can set regardless of status — see the
+// "مشکوک" tab in the admin UI), so both can be combined, e.g.
+// ?status=corrected&needs_review=1 for "corrected rows I'm still unsure about".
 // ---------------------------------------------------------------------------
 adminRouter.get("/collocations", async (req: Request, res: Response) => {
     const search = String(req.query.search ?? "").trim();
     const status = String(req.query.status ?? "").trim(); // "valid" | "corrected" | ""
+    const needsReviewOnly = String(req.query.needs_review ?? "").trim() === "1";
     const parsedLimit = Number(req.query.limit ?? 50);
     const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 200) : 50;
     const parsedOffset = Number(req.query.offset ?? 0);
@@ -28,6 +35,9 @@ adminRouter.get("/collocations", async (req: Request, res: Response) => {
     if (status === "valid" || status === "corrected") {
         params.push(status);
         conditions.push(`status = $${params.length}`);
+    }
+    if (needsReviewOnly) {
+        conditions.push(`needs_review = true`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -52,7 +62,18 @@ adminRouter.get("/collocations", async (req: Request, res: Response) => {
             params.slice(0, params.length - 2)
         );
 
-        res.json({ results: rows, total: countRows[0]?.total ?? 0 });
+        // Also report the total needs_review count regardless of the current
+        // filter, so the admin UI can show a badge on the "مشکوک" tab without
+        // an extra round trip.
+        const { rows: needsReviewCountRows } = await pool.query(
+            `SELECT count(*)::int AS total FROM collocations WHERE needs_review = true`
+        );
+
+        res.json({
+            results: rows,
+            total: countRows[0]?.total ?? 0,
+            needsReviewTotal: needsReviewCountRows[0]?.total ?? 0,
+        });
     } catch (err) {
         console.error("Admin list fetch failed:", err);
         res.status(500).json({ error: "admin_list_failed" });
@@ -339,6 +360,32 @@ adminRouter.patch("/collocations/:id", async (req: Request, res: Response) => {
     } catch (err) {
         console.error("Admin update failed:", err);
         res.status(500).json({ error: "admin_update_failed" });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/collocations/clear-needs-review -> bulk-clear the "مشکوک"
+// flag on every currently-flagged row in one shot.
+//
+// Why this exists: needs_review round-trips through CSV import/export now
+// (see importDataset.ts), and the ORIGINAL raw dataset file has this column
+// set to 1 on every single row (a leftover from an earlier pipeline stage,
+// not a real per-row signal). That means a first-time import of the raw
+// file floods the "مشکوک" tab with the entire dataset — which would be
+// unusably tedious to clear one row at a time. This endpoint exists purely
+// to give the admin a fast, one-click way to reset that flag in bulk right
+// after such an import, so "مشکوک" can go back to meaning what it's meant
+// to mean going forward: rows *this admin* has actively flagged.
+// ---------------------------------------------------------------------------
+adminRouter.post("/collocations/clear-needs-review", async (_req: Request, res: Response) => {
+    try {
+        const { rowCount } = await pool.query(
+            `UPDATE collocations SET needs_review = false WHERE needs_review = true`
+        );
+        res.json({ cleared: rowCount ?? 0 });
+    } catch (err) {
+        console.error("Admin bulk clear-needs-review failed:", err);
+        res.status(500).json({ error: "admin_bulk_clear_failed" });
     }
 });
 

@@ -26,6 +26,12 @@ function toNullableFloat(v: string | undefined): number | null {
     return Number.isFinite(n) ? n : null;
 }
 
+function toBoolean(v: string | undefined): boolean {
+    if (v === undefined || v === null) return false;
+    const t = v.trim().toLowerCase();
+    return t === "1" || t === "true" || t === "yes";
+}
+
 function buildDisplayForm(word1: string, word2: string | null): string {
     const w1 = (word1 || "").trim();
     const w2 = (word2 || "").trim();
@@ -101,12 +107,30 @@ async function main() {
             // words, same as before.
             const displayFormFromCsv = (row.display_form || "").trim();
             const displayForm = displayFormFromCsv || buildDisplayForm(word1, word2);
+            // Previously this was silently dropped (the INSERT below never
+            // referenced it), so every import reset needs_review to false no
+            // matter what the CSV said — which meant round-tripping an admin
+            // export (curate rows → export → re-import) silently threw away
+            // every "مشکوک" flag an admin had set, the same class of bug that
+            // display_form had. Now honored just like display_form is.
+            //
+            // Note: the ORIGINAL final_df.csv has needs_review=1 on every
+            // single row (a leftover from an earlier, pre-curation pipeline
+            // stage, not a real per-row signal) — so importing that specific
+            // file will flag the whole dataset as needing review. That's
+            // expected for a fresh/raw import: it accurately says "nothing
+            // here has been human-reviewed yet," and the admin panel's
+            // "مشکوک" tab is exactly the queue for working through that. Once
+            // you've cleared some flags and export again, the exported CSV's
+            // needs_review column reflects real per-row curation progress and
+            // will round-trip correctly from then on.
+            const needsReview = toBoolean(row.needs_review);
 
             const collocationInsert = await client.query<{ id: number }>(
                 `INSERT INTO collocations
                     (pair_id, word1, word2, display_form, pos_pattern, status, correction_note,
-                     pmi, t_score, llr, logdice, combined_score, minmax_score)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                     pmi, t_score, llr, logdice, combined_score, minmax_score, needs_review)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                  RETURNING id`,
                 [
                     Number(pairId),
@@ -122,6 +146,7 @@ async function main() {
                     toNullableFloat(row.logdice),
                     toNullableFloat(row.combined_score),
                     toNullableFloat(row.minmax_score),
+                    needsReview,
                 ]
             );
 
