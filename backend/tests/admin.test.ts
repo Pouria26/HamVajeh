@@ -37,7 +37,10 @@ describe("GET /api/admin/collocations — needs_review (\"مشکوک\") filter",
     it("returns needsReviewTotal alongside results, reflecting the whole table regardless of filters", async () => {
         const res = await request(app).get("/api/admin/collocations").set(authHeader);
         expect(res.status).toBe(200);
-        expect(res.body.total).toBe(4);
+        // 5 fixture rows total as of tests/fixtures.ts (includes collocation 5,
+        // which is below the public visibility floor but still fully visible
+        // to the admin panel — see tests/visibility.test.ts for that behavior).
+        expect(res.body.total).toBe(5);
         expect(res.body.needsReviewTotal).toBe(1);
     });
 

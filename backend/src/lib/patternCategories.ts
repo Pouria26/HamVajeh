@@ -84,3 +84,13 @@ export function allCategorizedPatterns(): string[] {
 export function categoryMeta(categoryId: string): PatternCategory | undefined {
     return PATTERN_CATEGORIES.find((c) => c.id === categoryId);
 }
+
+// Convenience for routes that return individual collocation rows to the
+// public site and want a ready-to-display label (e.g. "ترکیب‌های اسمی")
+// instead of the raw pos_pattern ("NOUN+NOUN") or having the frontend
+// duplicate this same pattern→category mapping. This is the ONLY place that
+// mapping lives — the frontend just displays whatever label this returns.
+export function categoryLabelForPattern(pattern: string | null | undefined): string {
+    const categoryId = categoryForPattern(pattern);
+    return categoryMeta(categoryId)?.label ?? "سایر ترکیب‌ها";
+}

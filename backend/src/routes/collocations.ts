@@ -1,30 +1,54 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db/pool";
-import { PATTERN_CATEGORIES, patternsForCategory, allCategorizedPatterns } from "../lib/patternCategories";
+import {
+    PATTERN_CATEGORIES,
+    patternsForCategory,
+    allCategorizedPatterns,
+    categoryLabelForPattern,
+} from "../lib/patternCategories";
+import { PUBLIC_MIN_SCORE, requireAtLeastFloor } from "../lib/visibility";
 
 export const collocationsRouter = Router();
 
 // Data-driven quality thresholds, chosen from the real minmax_score distribution
 // (median ~0.22, p90 ~0.35 across the 4840 imported collocations).
 //
+// Every threshold below is wrapped in requireAtLeastFloor() so none of them
+// can ever end up more lenient than PUBLIC_MIN_SCORE (see lib/visibility.ts)
+// — that's the one hard floor; these are additional, stricter editorial bars
+// layered on top of it for specific features.
+//
 // RELATED: lenient bar so most collocations still have a few related items to show
 // (only excludes the noisiest bottom half of the data).
-const RELATED_QUALITY_THRESHOLD = 0.2;
+const RELATED_QUALITY_THRESHOLD = requireAtLeastFloor(0.2);
 // FEATURED (homepage): strict bar — only solid, natural-sounding pairs ever
 // appear on the homepage, since that's the first impression and must never
 // show a noisy pair.
-const FEATURED_QUALITY_THRESHOLD = 0.4;
+const FEATURED_QUALITY_THRESHOLD = requireAtLeastFloor(0.4);
 // A stricter "showcase" bar used to guarantee at least one standout item in
 // every featured batch (see /featured below), so the homepage never looks
 // like a flat, randomly-average sample.
-const FEATURED_SHOWCASE_THRESHOLD = 0.6;
-// BROWSE: same lenient bar as RELATED — this is a showcase/discovery feature,
-// so it should feel populated per category while still excluding pure noise.
-const BROWSE_QUALITY_THRESHOLD = 0.15;
+const FEATURED_SHOWCASE_THRESHOLD = requireAtLeastFloor(0.6);
+// BROWSE: same as the public visibility floor itself — /browse is meant to
+// be a fairly complete catalog view, just never showing outright-hidden rows.
+const BROWSE_QUALITY_THRESHOLD = requireAtLeastFloor(PUBLIC_MIN_SCORE);
+
+// Attaches a ready-to-display `pattern_category_label` (e.g. "ترکیب‌های اسمی")
+// to each row, computed from its raw pos_pattern. The public site should
+// never render raw technical tags like "NOUN+NOUN" — those stay in the
+// admin panel only, where the precise tag is actually useful for curation.
+function withPatternCategory<T extends { pos_pattern: string | null }>(
+    rows: T[]
+): (T & { pattern_category_label: string })[] {
+    return rows.map((r) => ({ ...r, pattern_category_label: categoryLabelForPattern(r.pos_pattern) }));
+}
 
 // GET /api/collocations/search?q=قرار&limit=20
-// Intentionally NOT quality-filtered: the learner should be able to find and see
-// everything that matches their query, ranked by score rather than hidden by it.
+// Ranked by score rather than hidden by any *editorial* quality bar — but
+// still excludes anything below the public visibility floor (PUBLIC_MIN_SCORE),
+// same as everywhere else on the public site. A learner should be able to
+// find everything that's actually "in" the dataset, not everything that was
+// ever imported.
 collocationsRouter.get("/search", async (req: Request, res: Response) => {
     const q = String(req.query.q ?? "").trim();
     const parsedLimit = Number(req.query.limit ?? 20);
@@ -41,17 +65,18 @@ collocationsRouter.get("/search", async (req: Request, res: Response) => {
         const { rows } = await pool.query(
             `SELECT id, pair_id, display_form, pos_pattern, minmax_score
              FROM collocations
-             WHERE display_form ILIKE '%' || $1 || '%'
-                OR similarity(display_form, $1) > 0.35
+             WHERE (display_form ILIKE '%' || $1 || '%'
+                    OR similarity(display_form, $1) > 0.35)
+                AND minmax_score >= $3
              ORDER BY
                 (display_form ILIKE $1 || '%') DESC,
                 similarity(display_form, $1) DESC,
                 minmax_score DESC NULLS LAST
              LIMIT $2`,
-            [q, limit]
+            [q, limit, PUBLIC_MIN_SCORE]
         );
 
-        res.json({ results: rows });
+        res.json({ results: withPatternCategory(rows) });
     } catch (err) {
         console.error("Search failed:", err);
         res.status(500).json({ error: "search_failed" });
@@ -108,7 +133,7 @@ collocationsRouter.get("/featured", async (req: Request, res: Response) => {
             [combined[i], combined[j]] = [combined[j], combined[i]];
         }
 
-        res.json({ results: combined });
+        res.json({ results: withPatternCategory(combined) });
     } catch (err) {
         console.error("Featured fetch failed:", err);
         res.status(500).json({ error: "featured_failed" });
@@ -205,7 +230,7 @@ collocationsRouter.get("/browse", async (req: Request, res: Response) => {
             [params, BROWSE_QUALITY_THRESHOLD]
         );
 
-        res.json({ results: rows, total: countRows[0]?.total ?? 0 });
+        res.json({ results: withPatternCategory(rows), total: countRows[0]?.total ?? 0 });
     } catch (err) {
         console.error("Browse fetch failed:", err);
         res.status(500).json({ error: "browse_failed" });
@@ -213,6 +238,10 @@ collocationsRouter.get("/browse", async (req: Request, res: Response) => {
 });
 
 // GET /api/collocations/:id -> full detail + example sentences
+//
+// Applies the public visibility floor (PUBLIC_MIN_SCORE): a collocation
+// below it 404s exactly like a non-existent id would, so there is no way to
+// distinguish "never existed" from "exists but is hidden" from the outside.
 collocationsRouter.get("/:id", async (req: Request, res: Response) => {
     const id = Number(req.params.id);
 
@@ -226,8 +255,8 @@ collocationsRouter.get("/:id", async (req: Request, res: Response) => {
             `SELECT id, pair_id, display_form, word1, word2, pos_pattern,
                     pmi, t_score, llr, logdice, combined_score, minmax_score
              FROM collocations
-             WHERE id = $1`,
-            [id]
+             WHERE id = $1 AND minmax_score >= $2`,
+            [id, PUBLIC_MIN_SCORE]
         );
 
         if (collocationRows.length === 0) {
@@ -244,7 +273,7 @@ collocationsRouter.get("/:id", async (req: Request, res: Response) => {
         );
 
         res.json({
-            collocation: collocationRows[0],
+            collocation: withPatternCategory(collocationRows)[0],
             examples: exampleRows,
         });
     } catch (err) {
@@ -297,7 +326,10 @@ collocationsRouter.post("/:id/report", async (req: Request, res: Response) => {
     }
 
     try {
-        const { rows: collocationRows } = await pool.query(`SELECT id FROM collocations WHERE id = $1`, [id]);
+        const { rows: collocationRows } = await pool.query(
+            `SELECT id FROM collocations WHERE id = $1 AND minmax_score >= $2`,
+            [id, PUBLIC_MIN_SCORE]
+        );
         if (collocationRows.length === 0) {
             res.status(404).json({ error: "not_found" });
             return;
@@ -332,6 +364,10 @@ collocationsRouter.post("/:id/report", async (req: Request, res: Response) => {
 // Other collocations that share word1 or word2 with this one (e.g. "قرار گرفتن"
 // relates to "قرار دادن", "قرار داشتن"), filtered to a lenient quality bar so
 // most collocations still surface a few related items.
+//
+// Like the detail route, this 404s if the BASE collocation itself is below
+// the public visibility floor — an API caller shouldn't be able to probe
+// "related items of a hidden row" as a backdoor to confirm it exists.
 collocationsRouter.get("/:id/related", async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     const parsedLimit = Number(req.query.limit ?? 6);
@@ -344,8 +380,8 @@ collocationsRouter.get("/:id/related", async (req: Request, res: Response) => {
 
     try {
         const { rows: baseRows } = await pool.query<{ word1: string; word2: string | null }>(
-            `SELECT word1, word2 FROM collocations WHERE id = $1`,
-            [id]
+            `SELECT word1, word2 FROM collocations WHERE id = $1 AND minmax_score >= $2`,
+            [id, PUBLIC_MIN_SCORE]
         );
 
         if (baseRows.length === 0) {
@@ -370,7 +406,7 @@ collocationsRouter.get("/:id/related", async (req: Request, res: Response) => {
             [id, RELATED_QUALITY_THRESHOLD, word1, word2, limit]
         );
 
-        res.json({ results: rows });
+        res.json({ results: withPatternCategory(rows) });
     } catch (err) {
         console.error("Related fetch failed:", err);
         res.status(500).json({ error: "related_failed" });

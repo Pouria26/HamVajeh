@@ -3,6 +3,10 @@ export interface CollocationSummary {
   pair_id: number;
   display_form: string;
   pos_pattern: string | null;
+  // Ready-to-display label like "ترکیب‌های اسمی", computed server-side from
+  // pos_pattern (see backend/src/lib/patternCategories.ts). The public UI
+  // should always show this instead of the raw pos_pattern.
+  pattern_category_label: string;
   minmax_score: number | null;
 }
 
@@ -29,6 +33,7 @@ export interface CollocationDetail {
   word1: string;
   word2: string | null;
   pos_pattern: string | null;
+  pattern_category_label: string;
   pmi: number | null;
   t_score: number | null;
   llr: number | null;

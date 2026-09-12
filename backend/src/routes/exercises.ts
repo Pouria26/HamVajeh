@@ -1,11 +1,14 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db/pool";
+import { PUBLIC_MIN_SCORE, requireAtLeastFloor } from "../lib/visibility";
 
 export const exercisesRouter = Router();
 
 // Same lenient quality bar used for /browse and /related — the daily challenge
 // is a showcase feature, so it should never surface a noisy, low-score pair.
-const CHALLENGE_QUALITY_THRESHOLD = 0.2;
+// Wrapped in requireAtLeastFloor() so it can never end up more lenient than
+// the public visibility floor (see lib/visibility.ts).
+const CHALLENGE_QUALITY_THRESHOLD = requireAtLeastFloor(0.2);
 const CHALLENGE_SIZE = 5;
 
 // Turns a date string like "2026-08-29" into a stable float in (-1, 1),
@@ -85,6 +88,10 @@ exercisesRouter.get("/daily-challenge", async (_req: Request, res: Response) => 
 });
 
 // GET /api/exercises/random -> one random exercise with shuffled options
+//
+// Joins to collocations to enforce the public visibility floor — without
+// this, a hidden (below-threshold) collocation's exercises could still turn
+// up here even though its own detail page 404s and it's absent from search.
 exercisesRouter.get("/random", async (_req: Request, res: Response) => {
     try {
         const { rows: exampleRows } = await pool.query(
@@ -92,8 +99,10 @@ exercisesRouter.get("/random", async (_req: Request, res: Response) => {
              FROM examples e
              JOIN collocations c ON c.id = e.collocation_id
              WHERE e.blank_sentence IS NOT NULL
+                AND c.minmax_score >= $1
              ORDER BY random()
-             LIMIT 1`
+             LIMIT 1`,
+            [PUBLIC_MIN_SCORE]
         );
 
         if (exampleRows.length === 0) {
@@ -125,6 +134,10 @@ exercisesRouter.get("/random", async (_req: Request, res: Response) => {
 });
 
 // GET /api/exercises/collocation/:collocationId -> all exercises for one collocation
+//
+// If the collocation itself is below the public visibility floor, this
+// returns an empty list — same shape as "no examples", never a distinct
+// error — so it can't be used to detect a hidden row's existence.
 exercisesRouter.get("/collocation/:collocationId", async (req: Request, res: Response) => {
     const collocationId = Number(req.params.collocationId);
 
@@ -135,11 +148,14 @@ exercisesRouter.get("/collocation/:collocationId", async (req: Request, res: Res
 
     try {
         const { rows: examples } = await pool.query(
-            `SELECT id, blank_sentence, example_order
-             FROM examples
-             WHERE collocation_id = $1 AND blank_sentence IS NOT NULL
-             ORDER BY example_order ASC`,
-            [collocationId]
+            `SELECT e.id, e.blank_sentence, e.example_order
+             FROM examples e
+             JOIN collocations c ON c.id = e.collocation_id
+             WHERE e.collocation_id = $1
+                AND e.blank_sentence IS NOT NULL
+                AND c.minmax_score >= $2
+             ORDER BY e.example_order ASC`,
+            [collocationId, PUBLIC_MIN_SCORE]
         );
 
         const exampleIds = examples.map((e) => e.id);
@@ -180,6 +196,11 @@ exercisesRouter.get("/collocation/:collocationId", async (req: Request, res: Res
 });
 
 // POST /api/exercises/:exampleId/check -> check selected answer
+//
+// Joins through to the owning collocation to enforce the visibility floor —
+// otherwise this would leak the correct answer for a hidden collocation's
+// exercise to anyone who guesses/enumerates an exampleId, even though
+// nothing else on the public site can lead them there.
 exercisesRouter.post("/:exampleId/check", async (req: Request, res: Response) => {
     const exampleId = Number(req.params.exampleId);
     const optionId = Number(req.body?.optionId);
@@ -196,10 +217,12 @@ exercisesRouter.post("/:exampleId/check", async (req: Request, res: Response) =>
 
     try {
         const { rows } = await pool.query(
-            `SELECT id, option_text, is_correct
-             FROM exercise_options
-             WHERE example_id = $1`,
-            [exampleId]
+            `SELECT eo.id, eo.option_text, eo.is_correct
+             FROM exercise_options eo
+             JOIN examples e ON e.id = eo.example_id
+             JOIN collocations c ON c.id = e.collocation_id
+             WHERE eo.example_id = $1 AND c.minmax_score >= $2`,
+            [exampleId, PUBLIC_MIN_SCORE]
         );
 
         const chosen = rows.find((r) => r.id === optionId);

@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import type { CollocationSummary } from "../types";
 import { ScoreBadge } from "./ScoreBadge";
-import { patternLabel } from "../lib/patternLabels";
 
 export function CollocationCard({ collocation }: { collocation: CollocationSummary }) {
   return (
@@ -14,9 +13,9 @@ export function CollocationCard({ collocation }: { collocation: CollocationSumma
           {collocation.display_form}
         </span>
         <div className="flex items-center gap-2">
-          {collocation.pos_pattern && (
+          {collocation.pattern_category_label && (
             <span className="rounded-md bg-ink-100 px-2 py-0.5 text-xs font-medium text-ink-500">
-              {patternLabel(collocation.pos_pattern)}
+              {collocation.pattern_category_label}
             </span>
           )}
           <ScoreBadge score={collocation.minmax_score} />

@@ -8,7 +8,6 @@ import { CollocationCard } from "../components/CollocationCard";
 import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
 import { ReportModal, ReportTrigger } from "../components/ReportModal";
-import { patternLabel } from "../lib/patternLabels";
 import type { CollocationDetailResponse, CollocationSummary } from "../types";
 
 export function CollocationDetail() {
@@ -35,6 +34,7 @@ export function CollocationDetail() {
         pair_id: res.collocation.pair_id,
         display_form: res.collocation.display_form,
         pos_pattern: res.collocation.pos_pattern,
+        pattern_category_label: res.collocation.pattern_category_label,
         minmax_score: res.collocation.minmax_score,
       });
     } catch (err: unknown) {
@@ -99,9 +99,9 @@ export function CollocationDetail() {
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {collocation.pos_pattern && (
+          {collocation.pattern_category_label && (
             <span className="rounded-md bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-600">
-              الگوی نحوی: {patternLabel(collocation.pos_pattern)}
+              الگوی نحوی: {collocation.pattern_category_label}
             </span>
           )}
         </div>

@@ -87,6 +87,39 @@ export async function resetTestDatabase() {
          VALUES (4, 'چندی', 'قبل', 'چندی قبل', 'NOUN+ADP', 'valid', NULL,
                  4.0, 15.0, 3000.0, 8.0, 0.6, 0.4, true)`
     );
+
+    // Collocation 5: below the public visibility floor (PUBLIC_MIN_SCORE = 0.15),
+    // used by the "hidden from the public site, visible in admin" tests. Shares
+    // word1 ('قرار') with collocation 1 specifically so we can also confirm it's
+    // excluded from collocation 1's /related results. Has one full exercise
+    // (blank_sentence + options) so exercise-endpoint visibility can be tested too.
+    const c5 = await pool.query<{ id: number }>(
+        `INSERT INTO collocations
+            (pair_id, word1, word2, display_form, pos_pattern, status, correction_note,
+             pmi, t_score, llr, logdice, combined_score, minmax_score)
+         VALUES (5, 'قرار', 'دادن', 'قرار دادن', 'NOUN+VERB', 'valid', NULL,
+                 1.0, 5.0, 100.0, 3.0, 0.1, 0.05)
+         RETURNING id`
+    );
+    const c5Id = c5.rows[0].id;
+
+    const e5 = await pool.query<{ id: number }>(
+        `INSERT INTO examples (collocation_id, sentence, blank_sentence, target_phrase, example_order)
+         VALUES ($1, 'او پرونده را روی میز قرار داد.', 'او پرونده را روی میز ___________.', 'قرار داد', 1)
+         RETURNING id`,
+        [c5Id]
+    );
+    const e5Id = e5.rows[0].id;
+
+    await pool.query(
+        `INSERT INTO exercise_options (example_id, option_text, option_order, is_correct)
+         VALUES
+            ($1, 'قرار داد', 1, true),
+            ($1, 'برداشت', 2, false),
+            ($1, 'شکست', 3, false),
+            ($1, 'بست', 4, false)`,
+        [e5Id]
+    );
 }
 
 export async function closeTestDatabase() {
