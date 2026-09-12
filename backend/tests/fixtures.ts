@@ -78,6 +78,15 @@ export async function resetTestDatabase() {
          VALUES (3, 'هفته‌نامه', 'منتشر کردن', 'هفته‌نامه منتشر کردن', 'NOUN+VERB', 'valid', NULL,
                  5.0, 20.0, 5000.0, 10.0, 0.8, 0.5)`
     );
+
+    // Collocation 4: flagged needs_review = true, used by the admin "مشکوک" queue tests
+    await pool.query(
+        `INSERT INTO collocations
+            (pair_id, word1, word2, display_form, pos_pattern, status, correction_note,
+             pmi, t_score, llr, logdice, combined_score, minmax_score, needs_review)
+         VALUES (4, 'چندی', 'قبل', 'چندی قبل', 'NOUN+ADP', 'valid', NULL,
+                 4.0, 15.0, 3000.0, 8.0, 0.6, 0.4, true)`
+    );
 }
 
 export async function closeTestDatabase() {

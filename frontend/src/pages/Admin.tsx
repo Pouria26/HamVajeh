@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
 import {
   addAdminExampleOption,
   clearAdminToken,
@@ -206,6 +206,15 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Tracks the last server-confirmed needs_review value for whichever item is
+  // currently open, keyed by id. This is the source of truth saveCollocation
+  // uses to tell whether needs_review actually changed — deliberately NOT
+  // derived from `results`, since that list can be stale, filtered out, or
+  // simply not contain this row (e.g. opened via a direct link, or the list
+  // hasn't reloaded since a filter change). Updated on every load/create/save
+  // of the detail record, so it always reflects what the server last said.
+  const lastKnownNeedsReview = useRef<{ id: number; needsReview: boolean } | null>(null);
+
   // --- create-new state --------------------------------------------------
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -259,6 +268,7 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
       const res = await getAdminCollocation(id);
       setCollocation(res.collocation);
       setExamples(res.examples);
+      lastKnownNeedsReview.current = { id, needsReview: res.collocation.needs_review };
       setDetailStatus("done");
     } catch (err) {
       if (handleAuthError(err)) return;
@@ -285,6 +295,7 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
         refreshListRow({ id, needs_review: false });
       }
       if (collocation?.id === id) setCollocation({ ...collocation, needs_review: false });
+      if (lastKnownNeedsReview.current?.id === id) lastKnownNeedsReview.current.needsReview = false;
     } catch (err) {
       if (handleAuthError(err)) return;
       setMessage("خطا در بروزرسانی علامت.");
@@ -323,6 +334,9 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
         setResults((prev) => prev.map((r) => ({ ...r, needs_review: false })));
       }
       if (collocation) setCollocation({ ...collocation, needs_review: false });
+      if (collocation && lastKnownNeedsReview.current?.id === collocation.id) {
+        lastKnownNeedsReview.current.needsReview = false;
+      }
       setMessage(`علامت «مشکوک» از ${res.cleared} مورد پاک شد.`);
     } catch (err) {
       if (handleAuthError(err)) return;
@@ -336,6 +350,18 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
     if (!collocation) return;
     setSaving(true);
     setMessage(null);
+    // Needed to keep the "مشکوک" tab's badge count and filtered list in sync
+    // when needs_review is changed via this form's checkbox instead of the
+    // list's quick ✓ button (which updates the count itself).
+    //
+    // Deliberately sourced from lastKnownNeedsReview (set whenever this
+    // record's detail was last loaded from the server — see openItem /
+    // onCreated) rather than from `results`: the row being edited may not
+    // be in the currently-loaded list page at all (opened directly, list
+    // filtered differently, or simply stale), in which case `results.find`
+    // would silently return undefined and skip the count update entirely.
+    const prevNeedsReview =
+      lastKnownNeedsReview.current?.id === collocation.id ? lastKnownNeedsReview.current.needsReview : undefined;
     try {
       await updateAdminCollocation(collocation.id, {
         word1: collocation.word1,
@@ -358,8 +384,19 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
         needs_review: collocation.needs_review,
         correction_note: collocation.correction_note,
       });
+      if (prevNeedsReview !== undefined && prevNeedsReview !== collocation.needs_review) {
+        setNeedsReviewTotal((n) => Math.max(0, n + (collocation.needs_review ? 1 : -1)));
+        // If we're inside the "مشکوک" queue and just cleared the flag, the
+        // row no longer belongs in this filtered view — drop it, matching
+        // what the quick ✓ button does.
+        if (statusFilter === "needs_review" && !collocation.needs_review) {
+          setResults((prev) => prev.filter((r) => r.id !== collocation.id));
+          setTotal((t) => Math.max(0, t - 1));
+        }
+      }
       const refreshed = await getAdminCollocation(collocation.id);
       setCollocation(refreshed.collocation);
+      lastKnownNeedsReview.current = { id: collocation.id, needsReview: refreshed.collocation.needs_review };
       setMessage("ذخیره شد.");
     } catch (err) {
       if (handleAuthError(err)) return;
@@ -552,11 +589,21 @@ function DatasetPanel({ onLocked }: { onLocked: () => void }) {
       needs_review: res.collocation.needs_review,
       example_count: res.examples.length,
     };
-    setResults((prev) => [summary, ...prev]);
-    setTotal((t) => t + 1);
+    // Only insert into the visible list if it actually matches the current
+    // filter (e.g. don't show a brand-new "valid" row while the "مشکوک" tab
+    // is open) — but always keep total counts accurate either way.
+    const matchesCurrentFilter =
+      statusFilter === "" ||
+      (statusFilter === "needs_review" ? summary.needs_review : summary.status === statusFilter);
+    if (matchesCurrentFilter) {
+      setResults((prev) => [summary, ...prev]);
+      setTotal((t) => t + 1);
+    }
+    if (summary.needs_review) setNeedsReviewTotal((n) => n + 1);
     setShowCreateForm(false);
     setSelectedId(res.collocation.id);
     setCollocation(res.collocation);
+    lastKnownNeedsReview.current = { id: res.collocation.id, needsReview: res.collocation.needs_review };
     setExamples(res.examples);
     setDetailStatus("done");
     setMessage("باهم‌آیی جدید با موفقیت اضافه شد.");
