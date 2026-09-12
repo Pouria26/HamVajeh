@@ -33,12 +33,13 @@ import type {
 const PAGE_SIZE = 50;
 
 export function Admin() {
-  const [authState, setAuthState] = useState<"checking" | "locked" | "unlocked">("checking");
+  const [authState, setAuthState] = useState<"checking" | "locked" | "unlocked">(() => {
+    return getAdminToken() ? "checking" : "locked";
+  });
 
   useEffect(() => {
     const existing = getAdminToken();
     if (!existing) {
-      setAuthState("locked");
       return;
     }
     // Validate the stored token with a cheap request before showing the panel.
@@ -1128,12 +1129,7 @@ function CreateCollocationForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-suggest the display form from word1 + word2 until the person edits it directly.
-  useEffect(() => {
-    if (!displayFormTouched) {
-      setDisplayForm([word1, word2].filter((w) => w.trim()).join(" "));
-    }
-  }, [word1, word2, displayFormTouched]);
+
 
   const updateExample = (key: string, patch: Partial<DraftExample>) => {
     setExamplesList((prev) => prev.map((e) => (e.key === key ? { ...e, ...patch } : e)));
@@ -1248,10 +1244,31 @@ function CreateCollocationForm({
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="واژه‌ی اول *">
-            <input className="admin-input" value={word1} onChange={(e) => setWord1(e.target.value)} required />
+            <input
+              className="admin-input"
+              value={word1}
+              onChange={(e) => {
+                const val = e.target.value;
+                setWord1(val);
+                if (!displayFormTouched) {
+                  setDisplayForm([val, word2].filter((w) => w.trim()).join(" "));
+                }
+              }}
+              required
+            />
           </Field>
           <Field label="واژه‌ی دوم (اختیاری)">
-            <input className="admin-input" value={word2} onChange={(e) => setWord2(e.target.value)} />
+            <input
+              className="admin-input"
+              value={word2}
+              onChange={(e) => {
+                const val = e.target.value;
+                setWord2(val);
+                if (!displayFormTouched) {
+                  setDisplayForm([word1, val].filter((w) => w.trim()).join(" "));
+                }
+              }}
+            />
           </Field>
           <Field label="شکل نمایشی">
             <input

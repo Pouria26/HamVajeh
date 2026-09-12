@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { pool } from "./db/pool";
 import { collocationsRouter } from "./routes/collocations";
 import { exercisesRouter } from "./routes/exercises";
@@ -24,6 +25,38 @@ export function createApp() {
         next();
     });
 
+    const isTestEnv = process.env.NODE_ENV === "test";
+
+    // General rate limiter for all /api endpoints
+    const globalApiLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 600,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skip: () => isTestEnv,
+        message: { error: "rate_limit_exceeded", message: "Too many requests, please try again later." },
+    });
+
+    // Stricter limiter on fuzzy search to prevent expensive trigram scan abuse
+    const searchLimiter = rateLimit({
+        windowMs: 60 * 1000,
+        max: 60,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skip: () => isTestEnv,
+        message: { error: "rate_limit_exceeded", message: "Too many search queries, please slow down." },
+    });
+
+    // Anti-spam limiter on crowdsourced report submissions
+    const reportLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 15,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skip: () => isTestEnv,
+        message: { error: "rate_limit_exceeded", message: "Too many reports submitted, please try again later." },
+    });
+
     app.get("/health", async (_req, res) => {
         try {
             await pool.query("SELECT 1");
@@ -32,6 +65,10 @@ export function createApp() {
             res.status(500).json({ status: "error", message: (err as Error).message });
         }
     });
+
+    app.use("/api", globalApiLimiter);
+    app.use("/api/collocations/search", searchLimiter);
+    app.use("/api/collocations/:id/report", reportLimiter);
 
     app.use("/api/collocations", collocationsRouter);
     app.use("/api/exercises", exercisesRouter);

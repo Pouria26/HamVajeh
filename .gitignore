@@ -28,4 +28,52 @@ dist-ssr
 .env.*
 !.env.example
 
+# Datasets and Archives
 Dataset/
+*.csv
+*.tsv
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Python & AI Agents
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+agent_temp/
+
+# Coverage and testing
+coverage/
+.nyc_output/
+.cache/
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+

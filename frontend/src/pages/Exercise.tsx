@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getCollocationExercises, getRandomExercise } from "../api/exercises";
 import { recordExerciseAttempt } from "../lib/localHistory";
@@ -25,7 +25,7 @@ function RandomExerciseMode() {
   const [key, setKey] = useState(0); // forces ExerciseQuestion to remount for a fresh question
   const [reporting, setReporting] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setStatus("loading");
     try {
       const res = await getRandomExercise();
@@ -35,10 +35,26 @@ function RandomExerciseMode() {
     } catch {
       setStatus("error");
     }
-  };
+  }, []);
 
   useEffect(() => {
-    load();
+    let ignore = false;
+    getRandomExercise()
+      .then((res) => {
+        if (!ignore) {
+          setCurrent(res);
+          setStatus("done");
+          setKey((k) => k + 1);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setStatus("error");
+        }
+      });
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   return (
@@ -106,16 +122,22 @@ function CollocationExerciseSet({ collocationId }: { collocationId: string }) {
   const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      setStatus("loading");
-      try {
-        const res = await getCollocationExercises(collocationId);
-        setExercises(res.exercises);
-        setStatus("done");
-      } catch {
-        setStatus("error");
-      }
-    })();
+    let ignore = false;
+    getCollocationExercises(collocationId)
+      .then((res) => {
+        if (!ignore) {
+          setExercises(res.exercises);
+          setStatus("done");
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setStatus("error");
+        }
+      });
+    return () => {
+      ignore = true;
+    };
   }, [collocationId]);
 
   if (status === "loading") {

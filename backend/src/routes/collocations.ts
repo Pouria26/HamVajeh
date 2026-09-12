@@ -7,6 +7,15 @@ import {
     categoryLabelForPattern,
 } from "../lib/patternCategories";
 import { PUBLIC_MIN_SCORE, requireAtLeastFloor } from "../lib/visibility";
+import { validateRequest } from "../middleware/validate";
+import {
+    searchQuerySchema,
+    featuredQuerySchema,
+    browseQuerySchema,
+    collocationIdParamSchema,
+    relatedQuerySchema,
+    createReportSchema,
+} from "../schemas";
 
 export const collocationsRouter = Router();
 
@@ -49,17 +58,17 @@ function withPatternCategory<T extends { pos_pattern: string | null }>(
 // same as everywhere else on the public site. A learner should be able to
 // find everything that's actually "in" the dataset, not everything that was
 // ever imported.
-collocationsRouter.get("/search", async (req: Request, res: Response) => {
-    const q = String(req.query.q ?? "").trim();
-    const parsedLimit = Number(req.query.limit ?? 20);
-    const limit = Number.isInteger(parsedLimit)
-        ? Math.min(Math.max(parsedLimit, 1), 50)
-        : 20;
+collocationsRouter.get(
+    "/search",
+    validateRequest({ query: searchQuerySchema }),
+    async (req: Request, res: Response) => {
+        const q = String(req.query.q ?? "").trim();
+        const limit = Number(req.query.limit ?? 20);
 
-    if (!q) {
-        res.json({ results: [] });
-        return;
-    }
+        if (!q) {
+            res.json({ results: [] });
+            return;
+        }
 
     try {
         const { rows } = await pool.query(
@@ -89,9 +98,11 @@ collocationsRouter.get("/search", async (req: Request, res: Response) => {
 // solid ones (> 0.4), so every batch feels genuinely impressive rather than
 // just averagely-fine. Must be registered BEFORE the generic "/:id" route
 // below, otherwise Express would try to parse "featured" as a numeric id.
-collocationsRouter.get("/featured", async (req: Request, res: Response) => {
-    const parsedLimit = Number(req.query.limit ?? 6);
-    const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 20) : 6;
+collocationsRouter.get(
+    "/featured",
+    validateRequest({ query: featuredQuerySchema }),
+    async (req: Request, res: Response) => {
+        const limit = Number(req.query.limit ?? 6);
 
     // At least one showcase-tier item (but never more than a third of the
     // batch, so it doesn't crowd out variety) when one is available at all.
@@ -190,17 +201,13 @@ collocationsRouter.get("/patterns", async (_req: Request, res: Response) => {
 // GET /api/collocations/browse?category=NOUN_NOUN&limit=24&offset=0
 // Quality-filtered listing for one learner-facing category (see
 // lib/patternCategories.ts), with simple offset pagination and a total count.
-collocationsRouter.get("/browse", async (req: Request, res: Response) => {
-    const category = String(req.query.category ?? "").trim();
-    const parsedLimit = Number(req.query.limit ?? 24);
-    const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 60) : 24;
-    const parsedOffset = Number(req.query.offset ?? 0);
-    const offset = Number.isInteger(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
-
-    if (!category) {
-        res.status(400).json({ error: "missing_category" });
-        return;
-    }
+collocationsRouter.get(
+    "/browse",
+    validateRequest({ query: browseQuerySchema }),
+    async (req: Request, res: Response) => {
+        const category = String(req.query.category ?? "").trim();
+        const limit = Number(req.query.limit ?? 24);
+        const offset = Number(req.query.offset ?? 0);
 
     const patterns = patternsForCategory(category);
     // "OTHER" (patterns === null) means: everything NOT covered by the other
@@ -242,13 +249,11 @@ collocationsRouter.get("/browse", async (req: Request, res: Response) => {
 // Applies the public visibility floor (PUBLIC_MIN_SCORE): a collocation
 // below it 404s exactly like a non-existent id would, so there is no way to
 // distinguish "never existed" from "exists but is hidden" from the outside.
-collocationsRouter.get("/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+collocationsRouter.get(
+    "/:id",
+    validateRequest({ params: collocationIdParamSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     try {
         const { rows: collocationRows } = await pool.query(
@@ -296,34 +301,13 @@ const VALID_REPORT_REASONS = new Set([
 // its example sentences as wrong. Reports land in a moderation queue that
 // only the admin panel can see (GET/PATCH under /api/admin/reports).
 // body: { reason: string, comment?: string, example_id?: number }
-collocationsRouter.post("/:id/report", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
-
-    const reason = String(req.body?.reason ?? "").trim();
-    if (!VALID_REPORT_REASONS.has(reason)) {
-        res.status(400).json({ error: "invalid_reason" });
-        return;
-    }
-
-    const commentRaw = req.body?.comment;
-    const comment =
-        commentRaw !== undefined && commentRaw !== null
-            ? String(commentRaw).trim().slice(0, 1000) || null
-            : null;
-
-    let exampleId: number | null = null;
-    if (req.body?.example_id !== undefined && req.body?.example_id !== null) {
-        const parsed = Number(req.body.example_id);
-        if (!Number.isInteger(parsed) || parsed <= 0) {
-            res.status(400).json({ error: "invalid_example_id" });
-            return;
-        }
-        exampleId = parsed;
-    }
+collocationsRouter.post(
+    "/:id/report",
+    validateRequest({ params: collocationIdParamSchema, body: createReportSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
+        const { reason, comment, example_id } = req.body;
+        const exampleId = example_id !== undefined && example_id !== null ? Number(example_id) : null;
 
     try {
         const { rows: collocationRows } = await pool.query(
@@ -368,15 +352,12 @@ collocationsRouter.post("/:id/report", async (req: Request, res: Response) => {
 // Like the detail route, this 404s if the BASE collocation itself is below
 // the public visibility floor — an API caller shouldn't be able to probe
 // "related items of a hidden row" as a backdoor to confirm it exists.
-collocationsRouter.get("/:id/related", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    const parsedLimit = Number(req.query.limit ?? 6);
-    const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 20) : 6;
-
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+collocationsRouter.get(
+    "/:id/related",
+    validateRequest({ params: collocationIdParamSchema, query: relatedQuerySchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
+        const limit = Number(req.query.limit ?? 6);
 
     try {
         const { rows: baseRows } = await pool.query<{ word1: string; word2: string | null }>(

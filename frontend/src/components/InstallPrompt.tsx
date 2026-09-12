@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePwaInstall } from "../hooks/usePwaInstall";
 
 const DISMISS_KEY = "hamvajeh:installPromptDismissedAt";
@@ -19,12 +19,8 @@ function wasRecentlyDismissed(): boolean {
 
 export function InstallPrompt() {
   const { canPromptInstall, isInstalled, promptInstall } = usePwaInstall();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => wasRecentlyDismissed());
   const [showIOSInstructions, setShowIOSInstructions] = useState(false);
-
-  useEffect(() => {
-    setDismissed(wasRecentlyDismissed());
-  }, []);
 
   const handleDismiss = () => {
     try {

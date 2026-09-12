@@ -1,6 +1,12 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db/pool";
 import { PUBLIC_MIN_SCORE, requireAtLeastFloor } from "../lib/visibility";
+import { validateRequest } from "../middleware/validate";
+import {
+    collocationExercisesParamSchema,
+    checkAnswerParamSchema,
+    checkAnswerBodySchema,
+} from "../schemas";
 
 export const exercisesRouter = Router();
 
@@ -138,13 +144,11 @@ exercisesRouter.get("/random", async (_req: Request, res: Response) => {
 // If the collocation itself is below the public visibility floor, this
 // returns an empty list — same shape as "no examples", never a distinct
 // error — so it can't be used to detect a hidden row's existence.
-exercisesRouter.get("/collocation/:collocationId", async (req: Request, res: Response) => {
-    const collocationId = Number(req.params.collocationId);
-
-    if (!Number.isInteger(collocationId) || collocationId <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+exercisesRouter.get(
+    "/collocation/:collocationId",
+    validateRequest({ params: collocationExercisesParamSchema }),
+    async (req: Request, res: Response) => {
+        const collocationId = Number(req.params.collocationId);
 
     try {
         const { rows: examples } = await pool.query(
@@ -201,19 +205,12 @@ exercisesRouter.get("/collocation/:collocationId", async (req: Request, res: Res
 // otherwise this would leak the correct answer for a hidden collocation's
 // exercise to anyone who guesses/enumerates an exampleId, even though
 // nothing else on the public site can lead them there.
-exercisesRouter.post("/:exampleId/check", async (req: Request, res: Response) => {
-    const exampleId = Number(req.params.exampleId);
-    const optionId = Number(req.body?.optionId);
-
-    if (
-        !Number.isInteger(exampleId) ||
-        exampleId <= 0 ||
-        !Number.isInteger(optionId) ||
-        optionId <= 0
-    ) {
-        res.status(400).json({ error: "invalid_input" });
-        return;
-    }
+exercisesRouter.post(
+    "/:exampleId/check",
+    validateRequest({ params: checkAnswerParamSchema, body: checkAnswerBodySchema }),
+    async (req: Request, res: Response) => {
+        const exampleId = Number(req.params.exampleId);
+        const optionId = Number(req.body.optionId);
 
     try {
         const { rows } = await pool.query(

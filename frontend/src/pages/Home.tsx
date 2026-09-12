@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { SearchLauncher } from "../components/SearchLauncher";
 import { CollocationCard } from "../components/CollocationCard";
@@ -19,10 +19,10 @@ export function Home() {
   const navigate = useNavigate();
   const [featured, setFeatured] = useState<CollocationSummary[]>([]);
   const [status, setStatus] = useState<"loading" | "error" | "done">("loading");
-  const [recent, setRecent] = useState<RecentEntry[]>([]);
-  const [stats, setStats] = useState<ExerciseStats>({ correct: 0, total: 0 });
+  const [recent] = useState<RecentEntry[]>(() => getRecentlyViewed());
+  const [stats] = useState<ExerciseStats>(() => getExerciseStats());
 
-  const loadFeatured = async () => {
+  const loadFeatured = useCallback(async () => {
     setStatus("loading");
     try {
       const res = await getFeaturedCollocations(6);
@@ -31,12 +31,25 @@ export function Home() {
     } catch {
       setStatus("error");
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadFeatured();
-    setRecent(getRecentlyViewed());
-    setStats(getExerciseStats());
+    let ignore = false;
+    getFeaturedCollocations(6)
+      .then((res) => {
+        if (!ignore) {
+          setFeatured(res.results);
+          setStatus("done");
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setStatus("error");
+        }
+      });
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : null;

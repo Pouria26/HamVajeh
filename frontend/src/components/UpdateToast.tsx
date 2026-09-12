@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { registerSW } from "virtual:pwa-register";
 
 export function UpdateToast() {
   const [needRefresh, setNeedRefresh] = useState(false);
-  const [updateFn, setUpdateFn] = useState<((reloadPage?: boolean) => Promise<void>) | null>(null);
+  const updateFnRef = useRef<((reloadPage?: boolean) => Promise<void>) | null>(null);
 
   useEffect(() => {
-    const update = registerSW({
+    updateFnRef.current = registerSW({
       immediate: true,
       onNeedRefresh() {
         setNeedRefresh(true);
@@ -16,7 +16,6 @@ export function UpdateToast() {
         // it's a nice-to-know, not an action the user must take.
       },
     });
-    setUpdateFn(() => update);
   }, []);
 
   if (!needRefresh) return null;
@@ -29,7 +28,7 @@ export function UpdateToast() {
         </div>
         <p className="flex-1 text-sm font-medium text-ink-800">نسخه‌ی جدید هم‌واژه آماده است</p>
         <button
-          onClick={() => updateFn?.(true)}
+          onClick={() => updateFnRef.current?.(true)}
           className="shrink-0 rounded-full bg-brand-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-600"
         >
           به‌روزرسانی

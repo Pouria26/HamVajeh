@@ -1,6 +1,18 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db/pool";
 import { deriveScoresFromQuality } from "../lib/scoreDerivation";
+import { validateRequest } from "../middleware/validate";
+import {
+    collocationIdParamSchema,
+    adminListQuerySchema,
+    adminCreateCollocationSchema,
+    adminPatchCollocationSchema,
+    adminPatchExampleSchema,
+    adminCreateOptionSchema,
+    adminReorderExamplesSchema,
+    adminReportsQuerySchema,
+    adminPatchReportSchema,
+} from "../schemas";
 
 export const adminRouter = Router();
 
@@ -14,14 +26,15 @@ export const adminRouter = Router();
 // "مشکوک" tab in the admin UI), so both can be combined, e.g.
 // ?status=corrected&needs_review=1 for "corrected rows I'm still unsure about".
 // ---------------------------------------------------------------------------
-adminRouter.get("/collocations", async (req: Request, res: Response) => {
-    const search = String(req.query.search ?? "").trim();
-    const status = String(req.query.status ?? "").trim(); // "valid" | "corrected" | ""
-    const needsReviewOnly = String(req.query.needs_review ?? "").trim() === "1";
-    const parsedLimit = Number(req.query.limit ?? 50);
-    const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 200) : 50;
-    const parsedOffset = Number(req.query.offset ?? 0);
-    const offset = Number.isInteger(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+adminRouter.get(
+    "/collocations",
+    validateRequest({ query: adminListQuerySchema }),
+    async (req: Request, res: Response) => {
+        const search = String(req.query.search ?? "").trim();
+        const status = String(req.query.status ?? "").trim(); // "valid" | "corrected" | ""
+        const needsReviewOnly = String(req.query.needs_review ?? "").trim() === "1";
+        const limit = Number(req.query.limit ?? 50);
+        const offset = Number(req.query.offset ?? 0);
 
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -100,8 +113,11 @@ function buildDisplayForm(word1: string, word2: string | null | undefined): stri
     return `${w1} ${w2}`;
 }
 
-adminRouter.post("/collocations", async (req: Request, res: Response) => {
-    const body = req.body ?? {};
+adminRouter.post(
+    "/collocations",
+    validateRequest({ body: adminCreateCollocationSchema }),
+    async (req: Request, res: Response) => {
+        const body = req.body ?? {};
 
     const word1 = String(body.word1 ?? "").trim();
     if (!word1) {
@@ -227,12 +243,11 @@ adminRouter.post("/collocations", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/admin/collocations/:id -> full detail incl. examples + options
 // ---------------------------------------------------------------------------
-adminRouter.get("/collocations/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.get(
+    "/collocations/:id",
+    validateRequest({ params: collocationIdParamSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     try {
         const { rows: collocationRows } = await pool.query(
@@ -293,12 +308,11 @@ const EDITABLE_COLLOCATION_FIELDS = [
     "correction_note",
 ] as const;
 
-adminRouter.patch("/collocations/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.patch(
+    "/collocations/:id",
+    validateRequest({ params: collocationIdParamSchema, body: adminPatchCollocationSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     const body = req.body ?? {};
     const setClauses: string[] = [];
@@ -392,12 +406,11 @@ adminRouter.post("/collocations/clear-needs-review", async (_req: Request, res: 
 // ---------------------------------------------------------------------------
 // DELETE /api/admin/collocations/:id -> cascades to examples + options
 // ---------------------------------------------------------------------------
-adminRouter.delete("/collocations/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.delete(
+    "/collocations/:id",
+    validateRequest({ params: collocationIdParamSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     try {
         const { rowCount } = await pool.query(`DELETE FROM collocations WHERE id = $1`, [id]);
@@ -416,12 +429,11 @@ adminRouter.delete("/collocations/:id", async (req: Request, res: Response) => {
 // PATCH /api/admin/examples/:id -> edit sentence text + its options
 // body: { sentence?, blank_sentence?, target_phrase?, options?: [{id, option_text, is_correct}] }
 // ---------------------------------------------------------------------------
-adminRouter.patch("/examples/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.patch(
+    "/examples/:id",
+    validateRequest({ params: collocationIdParamSchema, body: adminPatchExampleSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     const body = req.body ?? {};
     const client = await pool.connect();
@@ -501,12 +513,11 @@ adminRouter.patch("/examples/:id", async (req: Request, res: Response) => {
 // workflow: type the real sentence + real answer, then just add 2–3 real,
 // meaningful wrong words yourself.
 // ---------------------------------------------------------------------------
-adminRouter.post("/examples/:id/options", async (req: Request, res: Response) => {
-    const exampleId = Number(req.params.id);
-    if (!Number.isInteger(exampleId) || exampleId <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.post(
+    "/examples/:id/options",
+    validateRequest({ params: collocationIdParamSchema, body: adminCreateOptionSchema }),
+    async (req: Request, res: Response) => {
+        const exampleId = Number(req.params.id);
 
     const optionText = String(req.body?.option_text ?? "").trim();
     if (!optionText) {
@@ -544,12 +555,11 @@ adminRouter.post("/examples/:id/options", async (req: Request, res: Response) =>
 // ---------------------------------------------------------------------------
 // DELETE /api/admin/options/:id -> remove a single distractor/option
 // ---------------------------------------------------------------------------
-adminRouter.delete("/options/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.delete(
+    "/options/:id",
+    validateRequest({ params: collocationIdParamSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     try {
         const { rowCount } = await pool.query(`DELETE FROM exercise_options WHERE id = $1`, [id]);
@@ -567,12 +577,11 @@ adminRouter.delete("/options/:id", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // DELETE /api/admin/examples/:id -> also removes its exercise_options (cascade)
 // ---------------------------------------------------------------------------
-adminRouter.delete("/examples/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.delete(
+    "/examples/:id",
+    validateRequest({ params: collocationIdParamSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     try {
         const { rowCount } = await pool.query(`DELETE FROM examples WHERE id = $1`, [id]);
@@ -593,14 +602,12 @@ adminRouter.delete("/examples/:id", async (req: Request, res: Response) => {
 // desired final order. Runs in two passes (negative temp orders first) to
 // avoid violating the UNIQUE (collocation_id, example_order) constraint.
 // ---------------------------------------------------------------------------
-adminRouter.patch("/collocations/:id/reorder-examples", async (req: Request, res: Response) => {
-    const collocationId = Number(req.params.id);
-    const orderedIds = req.body?.orderedIds;
-
-    if (!Number.isInteger(collocationId) || collocationId <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.patch(
+    "/collocations/:id/reorder-examples",
+    validateRequest({ params: collocationIdParamSchema, body: adminReorderExamplesSchema }),
+    async (req: Request, res: Response) => {
+        const collocationId = Number(req.params.id);
+        const orderedIds = req.body?.orderedIds;
     if (!Array.isArray(orderedIds) || orderedIds.length === 0 || !orderedIds.every((n) => Number.isInteger(n))) {
         res.status(400).json({ error: "invalid_ordered_ids" });
         return;
@@ -661,12 +668,13 @@ adminRouter.patch("/collocations/:id/reorder-examples", async (req: Request, res
 // collocation's display form (and example sentence, if the report was about
 // a specific example) so the admin doesn't have to look it up separately.
 // ---------------------------------------------------------------------------
-adminRouter.get("/reports", async (req: Request, res: Response) => {
-    const status = String(req.query.status ?? "").trim(); // "pending" | "resolved" | "dismissed" | ""
-    const parsedLimit = Number(req.query.limit ?? 50);
-    const limit = Number.isInteger(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 200) : 50;
-    const parsedOffset = Number(req.query.offset ?? 0);
-    const offset = Number.isInteger(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
+adminRouter.get(
+    "/reports",
+    validateRequest({ query: adminReportsQuerySchema }),
+    async (req: Request, res: Response) => {
+        const status = String(req.query.status ?? "").trim();
+        const limit = Number(req.query.limit ?? 50);
+        const offset = Number(req.query.offset ?? 0);
 
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -715,18 +723,12 @@ adminRouter.get("/reports", async (req: Request, res: Response) => {
 // PATCH /api/admin/reports/:id -> mark a report resolved / dismissed / pending
 // body: { status: 'pending' | 'resolved' | 'dismissed' }
 // ---------------------------------------------------------------------------
-adminRouter.patch("/reports/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
-
-    const status = String(req.body?.status ?? "").trim();
-    if (status !== "pending" && status !== "resolved" && status !== "dismissed") {
-        res.status(400).json({ error: "invalid_status" });
-        return;
-    }
+adminRouter.patch(
+    "/reports/:id",
+    validateRequest({ params: collocationIdParamSchema, body: adminPatchReportSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
+        const status = String(req.body.status).trim();
 
     try {
         const { rows } = await pool.query(
@@ -747,12 +749,11 @@ adminRouter.patch("/reports/:id", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // DELETE /api/admin/reports/:id -> remove a report from the queue entirely
 // ---------------------------------------------------------------------------
-adminRouter.delete("/reports/:id", async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        res.status(400).json({ error: "invalid_id" });
-        return;
-    }
+adminRouter.delete(
+    "/reports/:id",
+    validateRequest({ params: collocationIdParamSchema }),
+    async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
 
     try {
         const { rowCount } = await pool.query(`DELETE FROM reports WHERE id = $1`, [id]);
