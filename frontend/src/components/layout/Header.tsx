@@ -6,6 +6,7 @@ const navItems = [
   { to: "/browse", label: "مرور" },
   { to: "/exercise", label: "تمرین" },
   { to: "/challenge", label: "چالش روزانه" },
+  { to: "/tutor", label: "هم‌یار هوشمند ✨" },
 ];
 
 export function Header() {

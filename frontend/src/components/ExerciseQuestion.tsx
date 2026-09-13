@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { checkAnswer } from "../api/exercises";
 import { Spinner } from "./ui/Spinner";
+import { ExerciseExplanationCard } from "./ExerciseExplanationCard";
 
 interface Props {
   exampleId: number;
@@ -33,6 +34,7 @@ export function ExerciseQuestion({ exampleId, blankSentence, options, onResult }
   };
 
   const parts = blankSentence.split("___________");
+  const selectedOption = options.find((o) => o.id === selectedId);
 
   return (
     <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
@@ -86,6 +88,17 @@ export function ExerciseQuestion({ exampleId, blankSentence, options, onResult }
           );
         })}
       </div>
+
+      {result && !result.isCorrect && selectedOption && (
+        <ExerciseExplanationCard
+          exampleId={exampleId}
+          selectedOptionId={selectedOption.id}
+          selectedOptionText={selectedOption.text}
+          correctAnswerText={result.correctAnswer}
+          blankSentence={blankSentence}
+        />
+      )}
     </div>
   );
 }
+

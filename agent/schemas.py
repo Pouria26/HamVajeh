@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"] = Field(..., description="Role of the sender")
+    role: Literal["user", "assistant", "model"] = Field(..., description="Role of the sender")
     content: str = Field(..., min_length=1, description="Message content")
 
 

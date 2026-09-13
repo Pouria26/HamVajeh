@@ -20,7 +20,7 @@ export async function forwardToAgent(
     endpoint: string,
     method = "POST",
     body?: unknown,
-    timeoutMs = 30000
+    timeoutMs = 60000
 ): Promise<ForwardResult> {
     const baseUrl = getAgentServiceUrl();
     const url = `${baseUrl}${endpoint}`;
@@ -70,7 +70,16 @@ agentRouter.post(
     "/chat",
     validateRequest({ body: agentChatSchema }),
     async (req: Request, res: Response): Promise<void> => {
-        const result = await forwardToAgent("/chat", "POST", req.body);
+        const payload = {
+            ...req.body,
+            history: Array.isArray(req.body.history)
+                ? req.body.history.map((item: { role: string; content: string }) => ({
+                      ...item,
+                      role: item.role === "model" ? "assistant" : item.role,
+                  }))
+                : [],
+        };
+        const result = await forwardToAgent("/chat", "POST", payload);
         res.status(result.status).json(result.data);
     }
 );

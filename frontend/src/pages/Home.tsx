@@ -10,9 +10,9 @@ import type { ExerciseStats, RecentEntry } from "../lib/localHistory";
 
 const features = [
   { icon: "🔎", title: "جستجوی هوشمند", desc: "یک واژه بنویسید تا باهم‌آیی‌های آن را ببینید." },
-  { icon: "📖", title: "جمله‌های واقعی", desc: "برای هر باهم‌آیی چند جمله‌ی نمونه ببینید." },
-  { icon: "✍️", title: "تمرین جای‌خالی", desc: "با تمرین چهارگزینه‌ای یادگیری‌تان را بسنجید." },
-  { icon: "🗂️", title: "مرور دسته‌ای", desc: "بدون دانستن کلمه‌ی خاص، بر اساس دسته کاوش کنید." },
+  { icon: "✨", title: "هم‌یار هوشمند", desc: "گفتگوی زنده با هوش مصنوعی برای درک الگوها و کاربردها." },
+  { icon: "📖", title: "جمله‌های واقعی", desc: "برای هر باهم‌آیی چند جمله‌ی نمونه از پیکره ببینید." },
+  { icon: "✍️", title: "تمرین و تحلیل خطا", desc: "با تمرین چهارگزینه‌ای و تحلیل هوشمند یاد بگیرید." },
 ];
 
 export function Home() {
@@ -171,41 +171,56 @@ export function Home() {
         )}
       </section>
 
-      <section className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border border-amber-200 bg-linear-to-br from-amber-50 to-orange-50 px-6 py-10 text-center">
+      <section className="mt-14 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border border-brand-200 bg-linear-to-br from-brand-50 to-orange-100/70 px-6 py-8 text-center shadow-xs">
+          <span className="absolute top-3 left-3 rounded-full bg-brand-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-2xs">
+            هوش مصنوعی
+          </span>
+          <div className="text-3xl">🤖</div>
+          <h2 className="text-lg font-bold text-brand-900">هم‌یار هوشمند</h2>
+          <p className="max-w-xs text-xs leading-5 text-brand-800">گفتگوی مستقیم با هوش مصنوعی متصل به پیکره و تحلیل همنشینی کلمات.</p>
+          <button
+            onClick={() => navigate("/tutor")}
+            className="mt-auto w-full rounded-full bg-brand-500 py-2.5 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0"
+          >
+            گفتگو با هم‌یار
+          </button>
+        </div>
+
+        <div className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border border-amber-200 bg-linear-to-br from-amber-50 to-orange-50 px-6 py-8 text-center shadow-xs">
           <span className="absolute top-3 left-3 rounded-full bg-amber-400 px-2.5 py-0.5 text-[10px] font-bold text-white">
             جدید
           </span>
           <div className="text-3xl">🏆</div>
           <h2 className="text-lg font-bold text-amber-900">چالش روزانه</h2>
-          <p className="max-w-xs text-sm text-amber-700">۵ تمرین با تایمر، امتیازت را با دوستانت به اشتراک بگذار.</p>
+          <p className="max-w-xs text-xs leading-5 text-amber-700">۵ تمرین با تایمر، امتیازت را با دوستانت به اشتراک بگذار.</p>
           <button
             onClick={() => navigate("/challenge")}
-            className="mt-2 rounded-full bg-amber-500 px-8 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-md active:translate-y-0"
+            className="mt-auto w-full rounded-full bg-amber-500 py-2.5 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-md active:translate-y-0"
           >
             شروع چالش
           </button>
         </div>
 
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 px-6 py-10 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50 px-6 py-8 text-center shadow-xs">
           <div className="text-3xl">✍️</div>
           <h2 className="text-lg font-bold text-brand-800">تمرین آزاد</h2>
-          <p className="max-w-xs text-sm text-brand-700">یک تمرین تصادفی جای‌خالی را بدون محدودیت زمانی امتحان کنید.</p>
+          <p className="max-w-xs text-xs leading-5 text-brand-700">یک تمرین تصادفی جای‌خالی را همراه با تحلیل هوشمند اشتباهات امتحان کنید.</p>
           <button
             onClick={() => navigate("/exercise")}
-            className="mt-2 rounded-full bg-brand-500 px-8 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0"
+            className="mt-auto w-full rounded-full bg-brand-500 py-2.5 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0"
           >
             شروع تمرین
           </button>
         </div>
 
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-ink-100 bg-white px-6 py-10 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-ink-100 bg-white px-6 py-8 text-center shadow-xs">
           <div className="text-3xl">🗂️</div>
-          <h2 className="text-lg font-bold text-ink-900">نمی‌دانید چه جستجو کنید؟</h2>
-          <p className="max-w-xs text-sm text-ink-500">بر اساس دسته‌بندی زبانی کاوش کنید.</p>
+          <h2 className="text-lg font-bold text-ink-900">مرور دسته‌ها</h2>
+          <p className="max-w-xs text-xs leading-5 text-ink-500">بر اساس دسته‌بندی‌های نحوی و ساختار زبانی در باهم‌آیی‌ها کاوش کنید.</p>
           <button
             onClick={() => navigate("/browse")}
-            className="mt-2 rounded-full bg-ink-900 px-8 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-ink-800 hover:shadow-md active:translate-y-0"
+            className="mt-auto w-full rounded-full bg-ink-900 py-2.5 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-ink-800 hover:shadow-md active:translate-y-0"
           >
             مرور دسته‌ها
           </button>

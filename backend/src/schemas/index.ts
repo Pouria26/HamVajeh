@@ -173,7 +173,7 @@ export const agentChatSchema = z.object({
     history: z
         .array(
             z.object({
-                role: z.enum(["user", "assistant"], { message: "invalid_role" }),
+                role: z.enum(["user", "assistant", "model"], { message: "invalid_role" }),
                 content: z
                     .string()
                     .min(1, { message: "invalid_history" })

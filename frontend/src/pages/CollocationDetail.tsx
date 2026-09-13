@@ -106,12 +106,20 @@ export function CollocationDetail() {
           )}
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-4">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <Link
             to={`/exercise?collocationId=${collocation.id}`}
-            className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-6 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0"
+            className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-5 py-2.5 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-md active:translate-y-0 text-sm"
           >
             ✍️ تمرین همین باهم‌آیی
+          </Link>
+          <Link
+            to={`/tutor?q=${encodeURIComponent(
+              `درباره باهم‌آیی «${collocation.display_form}»، معنای آن و نحوه کاربردش در جمله‌های مختلف فارسی برایم توضیح بده.`
+            )}`}
+            className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-5 py-2.5 font-medium text-brand-700 shadow-xs transition hover:-translate-y-0.5 hover:bg-brand-100 hover:shadow-sm active:translate-y-0 text-sm"
+          >
+            ✨ از هم‌یار هوشمند بپرس
           </Link>
           <ReportTrigger onClick={() => setReportTarget({})} label="گزارش خطا در این باهم‌آیی" variant="outline" />
         </div>

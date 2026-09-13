@@ -4,6 +4,7 @@ const tabs = [
   { to: "/", label: "خانه", icon: "🏠" },
   { to: "/search", label: "جستجو", icon: "🔎" },
   { to: "/browse", label: "مرور", icon: "🗂️" },
+  { to: "/tutor", label: "هم‌یار", icon: "✨" },
   { to: "/exercise", label: "تمرین", icon: "✍️" },
   { to: "/challenge", label: "چالش", icon: "🏆" },
 ];

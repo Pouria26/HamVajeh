@@ -2,10 +2,12 @@ import { API_BASE_URL } from "../config";
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -22,13 +24,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     let message = `request_failed_${res.status}`;
+    let code: string | undefined;
     try {
       const body = await res.json();
-      if (body?.error) message = body.error;
+      if (body?.message) {
+        message = body.message;
+        code = body.error;
+      } else if (body?.error) {
+        message = body.error;
+        code = body.error;
+      }
     } catch {
       // response wasn't JSON, keep the generic message
     }
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, code);
   }
 
   return res.json() as Promise<T>;

@@ -229,3 +229,50 @@ export interface NewCollocationPayload {
   needs_review?: boolean;
   examples?: NewExamplePayload[];
 }
+
+// ---------------------------------------------------------------------------
+// AI Tutor Agent types
+// ---------------------------------------------------------------------------
+
+export type AgentRole = "user" | "assistant" | "model";
+
+export interface AgentChatMessage {
+  id: string;
+  role: AgentRole;
+  content: string;
+  timestamp: number;
+  suggestedFollowups?: string[];
+  isError?: boolean;
+}
+
+export interface AgentChatPayload {
+  message: string;
+  history?: { role: AgentRole; content: string }[];
+}
+
+export interface AgentChatResponse {
+  reply: string;
+  suggested_followups: string[];
+}
+
+export interface AgentExplainPayload {
+  example_id: number;
+  selected_option_id: number;
+}
+
+export interface AgentExplainResponse {
+  agrees_with_database: "agree" | "disagree" | "uncertain";
+  confidence: number;
+  linguistic_reasoning: string;
+  user_facing_answer: string;
+  flag_for_review: boolean;
+}
+
+export interface AgentHealthResponse {
+  status: "ok" | "degraded" | "error";
+  cached_explanations?: number;
+  flagged_discrepancies?: number;
+  error?: string;
+  message?: string;
+}
+
