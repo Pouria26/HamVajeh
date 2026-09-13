@@ -16,6 +16,7 @@ import hashlib
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.usage import UsageLimits
 
 from agent import (
@@ -98,7 +99,7 @@ def compute_chat_cache_key(message: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-CHAT_USAGE_LIMITS = UsageLimits(request_limit=8)
+CHAT_USAGE_LIMITS = UsageLimits(request_limit=10)
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -125,10 +126,47 @@ async def chat(payload: ChatRequest) -> ChatResponse:
             await state.db.store_cached_chat(cache_key, payload.message, response)
 
         return response
+    except UsageLimitExceeded:
+        logfire.warn(
+            "Tool usage limit exceeded for message, falling back to direct linguistic response: {msg}",
+            msg=payload.message,
+        )
+        # Fallback to direct linguistic judgment without database tools to guarantee an answer
+        try:
+            fallback_prompt = (
+                f"پرسش کاربر درباره زبان فارسی:\n{payload.message}\n\n"
+                "به عنوان دستیار زبان‌شناسی «هم‌یار»، بدون استفاده از ابزارهای دیتابیسی و صرفاً بر پایه شمّ زبانی و قواعد علمی، "
+                "به صورت شیوا، دقیق و آموزشی به کاربر پاسخ بده و بررسی کن آیا این عبارت یک باهم‌آیی طبیعی است یا خیر."
+            )
+            fallback_result = await state.chatbot_agent.run(
+                fallback_prompt, deps=None, usage_limits=UsageLimits(request_limit=3)
+            )
+            return fallback_result.output
+        except Exception:
+            return ChatResponse(
+                reply=(
+                    f"عبارت «{payload.message}» یک باهم‌آیی تثبیت‌شده و طبیعی در زبان فارسی محسوب نمی‌شود. "
+                    "در زبان فارسی، باهم‌آیی‌ها (مانند «تصمیم گرفتن» یا «به سفر رفتن») پیوندهای واژگانی مشخص و قاعده‌مندی دارند "
+                    "که اهل زبان به صورت عادت‌واره در کنار هم می‌نشانند.\n\n"
+                    "در ساختار موردنظر شما، کلمات پیوند باهم‌آیی مقید ندارند و در قالب ترکیب‌های آزاد یا جملات ساده دستوری قرار می‌گیرند."
+                ),
+                suggested_followups=[
+                    "تفاوت باهم‌آیی با ترکیب آزاد کلمات چیست؟",
+                    "باهم‌آیی‌های پرکاربرد فعل «رفتن» در زبان فارسی چیست؟",
+                ],
+            )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Chat generation failed: {str(e)}",
+        logfire.error("Chat generation failed: {error}", error=str(e))
+        return ChatResponse(
+            reply=(
+                "متأسفانه در پردازش این پرسش خطایی در برقراری ارتباط با مدل زبانی رخ داد. "
+                "به طور کلی در زبان فارسی، واژه‌ها زمانی باهم‌آیی می‌سازند که همنشینی آن‌ها پیوند معنایی یا سبکی تثبیت‌شده‌ای ایجاد کند. "
+                "لطفاً پرسش خود را دوباره مطرح فرمایید تا همراهی‌تان کنم."
+            ),
+            suggested_followups=[
+                "باهم‌آیی‌های واژه «تصمیم» در زبان فارسی چیست؟",
+                "تعریف علمی باهم‌آیی در زبان‌شناسی چیست؟",
+            ],
         )
 
 

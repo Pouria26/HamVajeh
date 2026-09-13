@@ -23,19 +23,24 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    let message = `request_failed_${res.status}`;
+    let message = "متأسفانه در پردازش درخواست خطایی رخ داد. لطفاً دوباره تلاش کنید.";
     let code: string | undefined;
     try {
       const body = await res.json();
-      if (body?.message) {
+      if (typeof body?.detail === "string" && body.detail.trim().length > 0) {
+        message = body.detail;
+      } else if (typeof body?.message === "string" && body.message.trim().length > 0) {
         message = body.message;
-        code = body.error;
-      } else if (body?.error) {
+      } else if (typeof body?.error === "string" && body.error.trim().length > 0) {
         message = body.error;
         code = body.error;
       }
     } catch {
-      // response wasn't JSON, keep the generic message
+      if (res.status === 429) {
+        message = "تعداد درخواست‌های شما بیش از حد مجاز است. لطفاً کمی صبر کرده و مجدداً تلاش فرمایید.";
+      } else if (res.status >= 500) {
+        message = "سرویس هوشمند در حال حاضر با بار کاری بالا مواجه است. لطفاً دقایقی بعد دوباره تلاش نمایید.";
+      }
     }
     throw new ApiError(message, res.status, code);
   }

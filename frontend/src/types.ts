@@ -245,6 +245,14 @@ export interface AgentChatMessage {
   isError?: boolean;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: AgentChatMessage[];
+}
+
 export interface AgentChatPayload {
   message: string;
   history?: { role: AgentRole; content: string }[];

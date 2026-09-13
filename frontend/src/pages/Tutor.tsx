@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getAgentHealth, sendAgentChatMessage } from "../api/agent";
+import { ChatSidebar } from "../components/ChatSidebar";
 import { Spinner } from "../components/ui/Spinner";
+import { useChatSessions } from "../hooks/useChatSessions";
 import type { AgentChatMessage, AgentHealthResponse } from "../types";
-
-const STORAGE_KEY = "hamvajeh_tutor_history_v1";
 
 const STARTER_PROMPTS = [
   {
     icon: "🔍",
     title: "باهم‌آیی‌های فعل سبک",
-    prompt: "با کلمه «تصمیم» چه فعل‌های سبکی هم‌آیی می‌سازند و کدام در پیکره فارسی رایج‌تر است؟",
+    prompt: "با کلمه «تصمیم» چه فعل‌های سبکی هم‌آیی می‌سازند و کدام در پایگاه داده هم‌واژه رایج‌تر است؟",
   },
   {
     icon: "💡",
@@ -33,19 +33,21 @@ export function Tutor() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQueryHandled = useRef(false);
 
-  const [messages, setMessages] = useState<AgentChatMessage[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {
-      // Ignore localStorage parse errors
-    }
-    return [];
-  });
+  const {
+    sessions,
+    activeSessionId,
+    activeSession,
+    createSession,
+    switchSession,
+    deleteSession,
+    renameSession,
+    clearAllSessions,
+    clearCurrentSession,
+    appendMessage,
+  } = useChatSessions();
 
+  const messages = activeSession?.messages || [];
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -53,15 +55,6 @@ export function Tutor() {
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // Sync conversation to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-    } catch {
-      // Ignore localStorage write quota errors
-    }
-  }, [messages]);
 
   // Scroll to bottom smoothly when messages change or while loading
   useEffect(() => {
@@ -94,15 +87,14 @@ export function Tutor() {
       timestamp: Date.now(),
     };
 
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
+    appendMessage(userMessage);
     setInput("");
     setLoading(true);
 
     // Build history for backend gateway
     const historyPayload = messages
       .filter((m) => !m.isError && m.content.trim().length > 0)
-      .slice(-6)
+      .slice(-10)
       .map((m) => ({
         role: m.role === "user" ? ("user" as const) : ("assistant" as const),
         content: m.content,
@@ -122,11 +114,13 @@ export function Tutor() {
         suggestedFollowups: response.suggested_followups,
       };
 
-      setMessages([...nextMessages, modelMessage]);
+      appendMessage(modelMessage);
     } catch (err: unknown) {
-      const errorText =
-        (err as { message?: string })?.message ||
-        "متأسفانه در برقراری ارتباط با هم‌یار خطایی رخ داد. لطفاً دوباره تلاش کنید.";
+      let errorText = (err as { message?: string })?.message;
+      if (!errorText || errorText.startsWith("request_failed") || errorText === "network_error") {
+        errorText =
+          "متأسفانه در حال حاضر ارتباط با سرویس هوشمند برقرار نشد. لطفاً چند لحظه دیگر دوباره تلاش نمایید.";
+      }
 
       const errorMessage: AgentChatMessage = {
         id: `err-${Date.now()}`,
@@ -135,7 +129,7 @@ export function Tutor() {
         timestamp: Date.now(),
         isError: true,
       };
-      setMessages([...nextMessages, errorMessage]);
+      appendMessage(errorMessage);
     } finally {
       setLoading(false);
       setTimeout(() => {
@@ -162,17 +156,6 @@ export function Tutor() {
     }
   };
 
-  const handleClearHistory = () => {
-    if (window.confirm("آیا مایل به پاک کردن تاریخچه گفتگو با هم‌یار هستید؟")) {
-      setMessages([]);
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {
-        // Ignore
-      }
-    }
-  };
-
   const handleCopy = async (id: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -184,77 +167,131 @@ export function Tutor() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8.5rem)] max-w-4xl flex-col sm:h-[calc(100vh-9.5rem)]">
-      {/* Header bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-ink-100 bg-white/70 px-4 py-3 backdrop-blur-md rounded-t-2xl">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-tr from-brand-600 to-brand-400 text-xl text-white shadow-sm">
-              🤖
-            </div>
-            <span
-              className={`absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full border-2 border-white ${
-                health?.status === "ok"
-                  ? "bg-emerald-500"
-                  : health?.status === "degraded"
-                  ? "bg-amber-500"
-                  : "bg-ink-300"
-              }`}
-              title={
-                health?.status === "ok"
-                  ? "متصل و آنلاین"
-                  : health?.status === "degraded"
-                  ? "سرویس تنزل‌یافته"
-                  : "در حال بررسی ارتباط"
-              }
-            />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-extrabold text-ink-900 sm:text-lg">
-                هم‌یار هوشمند باهم‌آیی‌ها
-              </h1>
-              <span className="rounded-md bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">
-                هوش مصنوعی
-              </span>
-            </div>
-            <p className="text-xs text-ink-400">
-              آموزش و کاوش تعاملی در باهم‌آیی‌های پیکره زبان فارسی
-            </p>
-          </div>
-        </div>
+    <div className="mx-auto flex h-[calc(100dvh-11.5rem)] min-h-[540px] max-h-[820px] max-w-5xl gap-3">
+      {/* Sidebar for Sessions */}
+      <ChatSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={(id) => {
+          switchSession(id);
+          if (window.innerWidth < 640) setSidebarOpen(false);
+        }}
+        onNewChat={() => {
+          createSession();
+          if (window.innerWidth < 640) setSidebarOpen(false);
+        }}
+        onDeleteSession={deleteSession}
+        onRenameSession={renameSession}
+        onClearAll={clearAllSessions}
+      />
 
-        <div className="flex items-center gap-2">
-          {messages.length > 0 && (
+      {/* Main Chat Area */}
+      <div className="flex flex-1 flex-col rounded-3xl border border-ink-100 bg-white/95 shadow-sm backdrop-blur-md overflow-hidden min-w-0">
+        {/* Header bar */}
+        <div className="flex shrink-0 items-center justify-between border-b border-ink-100 bg-white/80 px-4 py-3 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
-              onClick={handleClearHistory}
-              title="پاک‌کردن تاریخچه گفتگو"
-              className="rounded-xl border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-500 transition hover:bg-ink-50 hover:text-danger-600 active:scale-95"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              className="flex items-center gap-1.5 rounded-xl border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 shadow-2xs transition hover:bg-ink-50 hover:border-ink-300 active:scale-95 shrink-0"
+              title="تاریخچه گفتگوها"
             >
-              پاک‌کردن چت
+              <span>💬</span>
+              <span className="hidden sm:inline">تاریخچه</span>
+              <span className="rounded-full bg-brand-50 px-1.5 py-0.2 text-[10px] font-bold text-brand-700">
+                {sessions.length}
+              </span>
             </button>
-          )}
+
+            <div className="h-4 w-px bg-ink-200 hidden sm:block shrink-0" />
+
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="relative shrink-0">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 text-base text-white shadow-xs">
+                  🤖
+                </div>
+                <span
+                  className={`absolute -bottom-0.5 -left-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${
+                    health?.status === "ok"
+                      ? "bg-emerald-500"
+                      : health?.status === "degraded"
+                      ? "bg-amber-500"
+                      : "bg-ink-300"
+                  }`}
+                  title={
+                    health?.status === "ok"
+                      ? "متصل و آنلاین"
+                      : health?.status === "degraded"
+                      ? "سرویس تنزل‌یافته"
+                      : "در حال بررسی ارتباط"
+                  }
+                />
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-xs font-extrabold text-ink-900 sm:text-sm">
+                  {activeSession?.title || "هم‌یار هوشمند باهم‌آیی‌ها"}
+                </h1>
+                <p className="hidden text-[10px] text-ink-400 sm:block">
+                  پایگاه داده زبانی و آموزش تعاملی هم‌واژه
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 mr-2">
+            <button
+              type="button"
+              onClick={() => createSession()}
+              className="flex items-center gap-1 rounded-xl bg-brand-50 border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100 active:scale-95"
+              title="ایجاد گفتگوی جدید"
+            >
+              <span>+</span>
+              <span className="hidden sm:inline">چت جدید</span>
+            </button>
+
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("آیا مایل به پاک کردن این گفتگو هستید؟")) {
+                    clearCurrentSession();
+                  }
+                }}
+                title="پاک‌کردن پیام‌های این گفتگو"
+                className="rounded-xl border border-ink-200 px-2.5 py-1.5 text-xs font-medium text-ink-500 transition hover:bg-ink-50 hover:text-danger-600 active:scale-95"
+              >
+                پاک‌کردن
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
       {/* Messages stream / Empty state */}
       <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center py-6 text-center animate-fade-in-up">
-            <div className="relative mb-4">
-              <div className="h-16 w-16 rounded-3xl bg-gradient-to-tr from-brand-500 to-brand-300 grid place-items-center text-3xl text-white shadow-md">
-                ✨
+          <div className="my-auto flex min-h-full flex-col items-center justify-start sm:justify-center py-6 text-center animate-fade-in-up">
+            <div className="relative mb-4 flex items-center justify-center">
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-brand-500 to-brand-400 p-3.5 shadow-lg shadow-brand-500/25 ring-4 ring-brand-100">
+                <img
+                  src="/favicon.svg"
+                  alt="هم‌واژه"
+                  className="h-12 w-12 object-contain filter brightness-0 invert"
+                />
+                <span className="absolute -bottom-1.5 -left-1.5 flex h-7 w-7 items-center justify-center rounded-xl bg-white shadow-md border border-brand-100 text-sm">
+                  ✨
+                </span>
               </div>
             </div>
             <h2 className="text-xl font-extrabold text-ink-900 sm:text-2xl">
               سلام! من «هم‌یار» هستم
             </h2>
             <p className="mt-2 max-w-md text-sm text-ink-500 leading-6">
-              دستیار آموزشی شما برای یادگیری، کشف همنشینی‌های طبیعی و تسلط بر باهم‌آیی‌های زبان فارسی بر پایه پیکره معتبر همشهری.
+              دستیار آموزشی شما برای یادگیری، کشف همنشینی‌های طبیعی و تسلط بر باهم‌آیی‌های زبان فارسی بر پایه پایگاه داده جامع و معتبر هم‌واژه.
             </p>
 
-            <div className="mt-8 w-full max-w-2xl">
+            <div className="mt-6 w-full max-w-2xl">
               <p className="mb-3 text-right text-xs font-semibold text-ink-400">
                 پیشنهادها برای شروع گفتگو:
               </p>
@@ -308,7 +345,7 @@ export function Tutor() {
 
                     {!isUser && !msg.isError && (
                       <div className="mt-3 flex items-center justify-between border-t border-ink-100/60 pt-2 text-[11px] text-ink-400">
-                        <span>هم‌یار هوشمند • پایگاه پیکره همشهری</span>
+                        <span>هم‌یار هوشمند • پایگاه داده زبانی هم‌واژه</span>
                         <button
                           type="button"
                           onClick={() => handleCopy(msg.id, msg.content)}
@@ -353,7 +390,7 @@ export function Tutor() {
                 <div className="rounded-2xl rounded-tr-xs border border-ink-100 bg-white p-4 shadow-2xs">
                   <div className="flex items-center gap-2 text-xs font-medium text-brand-600">
                     <Spinner className="h-4 w-4 text-brand-500" />
-                    <span>هم‌یار در حال جستجو در پیکره زبانی و تدوین پاسخ است…</span>
+                    <span>هم‌یار در حال کاوش در پایگاه داده زبانی هم‌واژه و تدوین پاسخ است…</span>
                   </div>
                 </div>
               </div>
@@ -364,7 +401,7 @@ export function Tutor() {
       </div>
 
       {/* Input area */}
-      <div className="shrink-0 border-t border-ink-100 bg-white/90 p-3 backdrop-blur-md rounded-b-2xl sm:p-4">
+      <div className="shrink-0 border-t border-ink-100 bg-white/90 p-3 backdrop-blur-md sm:p-4">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -393,9 +430,10 @@ export function Tutor() {
         </form>
         <div className="mt-1.5 flex items-center justify-between px-1 text-[11px] text-ink-400">
           <span>Enter برای ارسال • Shift+Enter برای رفتن به سطر بعد</span>
-          <span>پاسخ‌ها توسط هوش مصنوعی و بر اساس پیکره زبانی همشهری تولید می‌شوند.</span>
+          <span>پاسخ‌ها توسط هوش مصنوعی و بر اساس پایگاه داده جامع هم‌واژه تولید می‌شوند.</span>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }
