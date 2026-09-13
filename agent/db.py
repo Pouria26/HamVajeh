@@ -16,7 +16,14 @@ exercise context and reading/writing the two agent-specific tables.
 
 import asyncpg
 
-from schemas import AuditEvidence, ExerciseEvidence, ExerciseJudgment
+from schemas import (
+    AuditEvidence,
+    ChatResponse,
+    CollocationDetailResult,
+    CollocationSearchResult,
+    ExerciseEvidence,
+    ExerciseJudgment,
+)
 
 CREATE_AGENT_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS agent_cache (
@@ -32,6 +39,13 @@ CREATE TABLE IF NOT EXISTS agent_flags (
     collocation_id  INTEGER NOT NULL,
     example_id      INTEGER,
     reasoning       TEXT NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS chat_cache (
+    query_hash      TEXT PRIMARY KEY,
+    user_message    TEXT NOT NULL,
+    response_json   JSONB NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 """
@@ -155,3 +169,88 @@ class Database:
                 "SELECT count(*) AS n FROM agent_flags WHERE created_at >= date_trunc('day', now())"
             )
         return int(row["n"])
+
+    async def search_collocations(
+        self, query: str, limit: int = 5
+    ) -> list[CollocationSearchResult]:
+        """Searches collocations matching the query text in display_form, word1, or word2."""
+        sql = """
+        SELECT id, display_form, pos_pattern, minmax_score, pmi, logdice
+        FROM collocations
+        WHERE display_form ILIKE '%' || $1 || '%'
+           OR word1 ILIKE '%' || $1 || '%'
+           OR word2 ILIKE '%' || $1 || '%'
+        ORDER BY
+           (display_form ILIKE $1 || '%') DESC,
+           minmax_score DESC NULLS LAST
+        LIMIT $2;
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(sql, query.strip(), limit)
+        return [CollocationSearchResult(**dict(r)) for r in rows]
+
+    async def get_collocation_details(
+        self, collocation_id: int
+    ) -> CollocationDetailResult | None:
+        """Retrieves full metadata and corpus sentences for a specific collocation ID."""
+        sql_collocation = """
+        SELECT id, display_form, word1, word2, pos_pattern, pmi, logdice, minmax_score, status, correction_note
+        FROM collocations
+        WHERE id = $1;
+        """
+        sql_examples = """
+        SELECT sentence
+        FROM examples
+        WHERE collocation_id = $1
+        ORDER BY example_order ASC
+        LIMIT 5;
+        """
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(sql_collocation, collocation_id)
+            if row is None:
+                return None
+            ex_rows = await conn.fetch(sql_examples, collocation_id)
+
+        data = dict(row)
+        data["examples"] = [r["sentence"] for r in ex_rows]
+        return CollocationDetailResult(**data)
+
+    async def get_collocation_examples(
+        self, collocation_id: int, limit: int = 3
+    ) -> list[str]:
+        """Fetches authentic sentence examples from the Hamshahri corpus for a collocation."""
+        sql = """
+        SELECT sentence
+        FROM examples
+        WHERE collocation_id = $1
+        ORDER BY example_order ASC
+        LIMIT $2;
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(sql, collocation_id, limit)
+        return [r["sentence"] for r in rows]
+
+    async def get_cached_chat(self, query_hash: str) -> ChatResponse | None:
+        """Retrieves a cached chat response by query hash to protect LLM quota."""
+        sql = "SELECT response_json FROM chat_cache WHERE query_hash = $1;"
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(sql, query_hash)
+        if row is None:
+            return None
+        return ChatResponse.model_validate_json(row["response_json"])
+
+    async def store_cached_chat(
+        self, query_hash: str, user_message: str, response: ChatResponse
+    ) -> None:
+        """Stores a chat response in the exact-match cache."""
+        sql = """
+        INSERT INTO chat_cache (query_hash, user_message, response_json)
+        VALUES ($1, $2, $3::jsonb)
+        ON CONFLICT (query_hash) DO UPDATE
+        SET response_json = EXCLUDED.response_json,
+            user_message = EXCLUDED.user_message,
+            created_at = now();
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(sql, query_hash, user_message, response.model_dump_json())
+

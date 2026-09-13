@@ -80,9 +80,14 @@ Start the development server with live reload:
 
 ## Running Verification Tests
 
-Run the automated verification suite to validate model connections, structured outputs, and multi-turn context retention:
+Run the unified test suite to validate model connections, database tool calling, exact-match caching, and multi-turn context retention:
 ```powershell
-.\venv\Scripts\python.exe test_step1.py
+# Run all available test suites (Step 1 & Step 2)
+.\venv\Scripts\python.exe test_cases.py
+
+# Or run a specific step individually
+.\venv\Scripts\python.exe test_cases.py 1   # Step 1: Chatbot & Fallback
+.\venv\Scripts\python.exe test_cases.py 2   # Step 2: Database Tools & Cache
 ```
 
 ---

@@ -22,6 +22,29 @@ class ChatResponse(BaseModel):
     )
 
 
+class CollocationSearchResult(BaseModel):
+    id: int
+    display_form: str
+    pos_pattern: str | None = None
+    minmax_score: float | None = None
+    pmi: float | None = None
+    logdice: float | None = None
+
+
+class CollocationDetailResult(BaseModel):
+    id: int
+    display_form: str
+    word1: str
+    word2: str | None = None
+    pos_pattern: str | None = None
+    pmi: float | None = None
+    logdice: float | None = None
+    minmax_score: float | None = None
+    status: str | None = None
+    correction_note: str | None = None
+    examples: list[str] = Field(default_factory=list)
+
+
 
 class ExerciseEvidence(BaseModel):
     """Everything fetched from Postgres for one 'why is this wrong' request."""

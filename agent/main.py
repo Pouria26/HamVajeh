@@ -12,11 +12,14 @@ Gemini API key is kept strictly on the backend.
 from contextlib import asynccontextmanager
 
 import logfire
+import hashlib
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pydantic_ai.usage import UsageLimits
 
 from agent import (
+    AgentDeps,
     build_audit_agent,
     build_chatbot_agent,
     build_exercise_agent,
@@ -90,13 +93,38 @@ async def root() -> dict:
     }
 
 
+def compute_chat_cache_key(message: str) -> str:
+    normalized = " ".join(message.strip().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+CHAT_USAGE_LIMITS = UsageLimits(request_limit=8)
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest) -> ChatResponse:
     """Conversational endpoint for the Persian Collocation AI Tutor ('هم‌یار')."""
+    # 1) Check exact-match cache for initial queries to preserve Gemini daily quota
+    cache_key = None
+    if not payload.history:
+        cache_key = compute_chat_cache_key(payload.message)
+        cached = await state.db.get_cached_chat(cache_key)
+        if cached is not None:
+            return cached
+
+    # 2) Execute Pydantic AI agent with real database tools and FallbackModel chain
     try:
         prompt = format_chat_prompt(payload.message, payload.history)
-        result = await state.chatbot_agent.run(prompt)
-        return result.output
+        result = await state.chatbot_agent.run(
+            prompt, deps=AgentDeps(db=state.db), usage_limits=CHAT_USAGE_LIMITS
+        )
+        response: ChatResponse = result.output
+
+        # 3) Store initial query in PostgreSQL cache for instant subsequent hits
+        if cache_key is not None:
+            await state.db.store_cached_chat(cache_key, payload.message, response)
+
+        return response
     except Exception as e:
         raise HTTPException(
             status_code=500,
