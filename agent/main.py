@@ -137,6 +137,9 @@ class ExplainRequest(BaseModel):
     selected_option_id: int
 
 
+EXPLAIN_USAGE_LIMITS = UsageLimits(request_limit=8)
+
+
 @app.post("/explain", response_model=ExerciseJudgment)
 async def explain(payload: ExplainRequest) -> ExerciseJudgment:
     """Analyzes a user's quiz mistake against authentic corpus evidence."""
@@ -155,23 +158,31 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
             detail="No matching example/option pair found for the given ids.",
         )
 
-    # 3) Ask the agent
-    context = render_exercise_context(evidence)
-    result = await state.exercise_agent.run(context)
-    judgment = result.output
+    # 3) Ask the agent with resilient model chain and usage limit
+    try:
+        context = render_exercise_context(evidence)
+        result = await state.exercise_agent.run(context, usage_limits=EXPLAIN_USAGE_LIMITS)
+        judgment: ExerciseJudgment = result.output
 
-    # 4) Persist: cache the answer, and log a flag if the agent disagreed
-    await state.db.store_cached_judgment(
-        payload.example_id, payload.selected_option_id, judgment
-    )
-    if judgment.flag_for_review:
-        await state.db.record_flag(
-            collocation_id=evidence.collocation_id,
-            example_id=evidence.example_id,
-            reasoning=judgment.linguistic_reasoning,
+        # 4) Persist: cache the answer, and log a flag if the agent flagged it for review
+        await state.db.store_cached_judgment(
+            payload.example_id, payload.selected_option_id, judgment
         )
+        if judgment.flag_for_review:
+            await state.db.record_flag(
+                collocation_id=evidence.collocation_id,
+                example_id=evidence.example_id,
+                reasoning=judgment.linguistic_reasoning,
+            )
 
-    return judgment
+        return judgment
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Exercise explanation failed: {str(e)}",
+        )
 
 
 @app.get("/health")

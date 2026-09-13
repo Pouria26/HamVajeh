@@ -145,7 +145,9 @@ class Database:
                 """
                 INSERT INTO agent_cache (example_id, selected_option_id, result_json)
                 VALUES ($1, $2, $3::jsonb)
-                ON CONFLICT (example_id, selected_option_id) DO NOTHING
+                ON CONFLICT (example_id, selected_option_id) DO UPDATE
+                SET result_json = EXCLUDED.result_json,
+                    created_at = now();
                 """,
                 example_id,
                 selected_option_id,

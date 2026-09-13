@@ -82,12 +82,13 @@ Start the development server with live reload:
 
 Run the unified test suite to validate model connections, database tool calling, exact-match caching, and multi-turn context retention:
 ```powershell
-# Run all available test suites (Step 1 & Step 2)
+# Run all available test suites (Steps 1, 2, & 3)
 .\venv\Scripts\python.exe test_cases.py
 
 # Or run a specific step individually
 .\venv\Scripts\python.exe test_cases.py 1   # Step 1: Chatbot & Fallback
 .\venv\Scripts\python.exe test_cases.py 2   # Step 2: Database Tools & Cache
+.\venv\Scripts\python.exe test_cases.py 3   # Step 3: Quiz Error Analysis & Auditing
 ```
 
 ---
@@ -117,13 +118,24 @@ Provides multi-turn Persian collocation tutoring with structured follow-ups.
 ```
 
 ### 2. Exercise Explainer Endpoint (`POST /explain`)
-Evaluates user quiz mistakes against database evidence and caches judgments.
+Evaluates user quiz mistakes against database evidence with independent Persian linguistic reasoning and caches judgments.
 
 **Request Body:**
 ```json
 {
   "example_id": 1,
   "selected_option_id": 2
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "agrees_with_database": "agree",
+  "confidence": "high",
+  "linguistic_reasoning": "گزینه انتخابی کاربر «بودجه جاری» یک ترکیب اسمی اداری است و از نظر نحوی نمی‌تواند جایگاه فعل را پر کند...",
+  "user_facing_answer": "سلام! انتخاب عبارت «بودجه جاری» از نظر ساختار دستوری و معنایی در زبان فارسی امکان‌پذیر نیست. در این جمله به فعلی مرکب مانند «مورد تشویق قرار گرفت» نیاز است...",
+  "flag_for_review": false
 }
 ```
 
