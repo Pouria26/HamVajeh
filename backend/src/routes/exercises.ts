@@ -62,10 +62,10 @@ exercisesRouter.get("/daily-challenge", async (_req: Request, res: Response) => 
 
         const exampleIds = exampleRows.map((r) => r.id);
         const { rows: optionRows } = await client.query(
-            `SELECT id, example_id, option_text, option_order
+            `SELECT id, example_id, option_text
              FROM exercise_options
              WHERE example_id = ANY($1::int[])
-             ORDER BY option_order ASC`,
+             ORDER BY example_id, random()`,
             [exampleIds]
         );
 

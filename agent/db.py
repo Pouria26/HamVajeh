@@ -23,6 +23,7 @@ from schemas import (
     CollocationSearchResult,
     ExerciseEvidence,
     ExerciseJudgment,
+    score_to_frequency_level,
 )
 
 CREATE_AGENT_TABLES_SQL = """
@@ -175,13 +176,16 @@ class Database:
     async def search_collocations(
         self, query: str, limit: int = 5
     ) -> list[CollocationSearchResult]:
-        """Searches collocations matching the query text in display_form, word1, or word2."""
+        """Searches collocations matching query in display_form, word1, or word2.
+        Excludes low-quality entries with minmax_score < 0.15 (<15).
+        """
         sql = """
-        SELECT id, display_form, pos_pattern, minmax_score, pmi, logdice
+        SELECT id, display_form, pos_pattern, minmax_score
         FROM collocations
-        WHERE display_form ILIKE '%' || $1 || '%'
+        WHERE (display_form ILIKE '%' || $1 || '%'
            OR word1 ILIKE '%' || $1 || '%'
-           OR word2 ILIKE '%' || $1 || '%'
+           OR word2 ILIKE '%' || $1 || '%')
+          AND (minmax_score IS NULL OR minmax_score >= 0.15)
         ORDER BY
            (display_form ILIKE $1 || '%') DESC,
            minmax_score DESC NULLS LAST
@@ -189,14 +193,28 @@ class Database:
         """
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(sql, query.strip(), limit)
-        return [CollocationSearchResult(**dict(r)) for r in rows]
+        results: list[CollocationSearchResult] = []
+        for r in rows:
+            raw_score = r["minmax_score"]
+            score_100 = round(raw_score * 100, 1) if raw_score is not None else None
+            level = score_to_frequency_level(score_100)
+            results.append(
+                CollocationSearchResult(
+                    id=r["id"],
+                    display_form=r["display_form"],
+                    pos_pattern=r["pos_pattern"],
+                    minmax_score=score_100,
+                    frequency_level=level,
+                )
+            )
+        return results
 
     async def get_collocation_details(
         self, collocation_id: int
     ) -> CollocationDetailResult | None:
         """Retrieves full metadata and corpus sentences for a specific collocation ID."""
         sql_collocation = """
-        SELECT id, display_form, word1, word2, pos_pattern, pmi, logdice, minmax_score, status, correction_note
+        SELECT id, display_form, word1, word2, pos_pattern, minmax_score, status, correction_note
         FROM collocations
         WHERE id = $1;
         """
@@ -213,9 +231,21 @@ class Database:
                 return None
             ex_rows = await conn.fetch(sql_examples, collocation_id)
 
-        data = dict(row)
-        data["examples"] = [r["sentence"] for r in ex_rows]
-        return CollocationDetailResult(**data)
+        raw_score = row["minmax_score"]
+        score_100 = round(raw_score * 100, 1) if raw_score is not None else None
+        level = score_to_frequency_level(score_100)
+        return CollocationDetailResult(
+            id=row["id"],
+            display_form=row["display_form"],
+            word1=row["word1"],
+            word2=row["word2"],
+            pos_pattern=row["pos_pattern"],
+            minmax_score=score_100,
+            frequency_level=level,
+            status=row["status"],
+            correction_note=row["correction_note"],
+            examples=[r["sentence"] for r in ex_rows],
+        )
 
     async def get_collocation_examples(
         self, collocation_id: int, limit: int = 3

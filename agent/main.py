@@ -99,7 +99,7 @@ def compute_chat_cache_key(message: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-CHAT_USAGE_LIMITS = UsageLimits(request_limit=10)
+CHAT_USAGE_LIMITS = UsageLimits(request_limit=15)
 
 
 @app.post("/chat", response_model=ChatResponse)

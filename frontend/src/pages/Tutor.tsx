@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getAgentHealth, sendAgentChatMessage } from "../api/agent";
 import { ChatSidebar } from "../components/ChatSidebar";
+import { MarkdownContent } from "../components/MarkdownContent";
 import { Spinner } from "../components/ui/Spinner";
 import { useChatSessions } from "../hooks/useChatSessions";
 import type { AgentChatMessage, AgentHealthResponse } from "../types";
@@ -273,13 +274,13 @@ export function Tutor() {
         {messages.length === 0 ? (
           <div className="my-auto flex min-h-full flex-col items-center justify-start sm:justify-center py-6 text-center animate-fade-in-up">
             <div className="relative mb-4 flex items-center justify-center">
-              <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-brand-500 to-brand-400 p-3.5 shadow-lg shadow-brand-500/25 ring-4 ring-brand-100">
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-white p-3 shadow-lg shadow-brand-500/10 border border-brand-100 ring-4 ring-brand-50">
                 <img
                   src="/favicon.svg"
                   alt="هم‌واژه"
-                  className="h-12 w-12 object-contain filter brightness-0 invert"
+                  className="h-14 w-14 object-contain"
                 />
-                <span className="absolute -bottom-1.5 -left-1.5 flex h-7 w-7 items-center justify-center rounded-xl bg-white shadow-md border border-brand-100 text-sm">
+                <span className="absolute -bottom-1 -left-1 flex h-6 w-6 items-center justify-center rounded-lg bg-brand-500 text-white shadow-xs text-xs">
                   ✨
                 </span>
               </div>
@@ -341,7 +342,11 @@ export function Tutor() {
                         : "rounded-2xl rounded-tr-xs border border-ink-100 bg-white p-4 text-sm leading-7 text-ink-900 shadow-2xs sm:p-5"
                     }`}
                   >
-                    <div className="whitespace-pre-line break-words">{msg.content}</div>
+                    {isUser || msg.isError ? (
+                      <div className="whitespace-pre-line break-words">{msg.content}</div>
+                    ) : (
+                      <MarkdownContent content={msg.content} />
+                    )}
 
                     {!isUser && !msg.isError && (
                       <div className="mt-3 flex items-center justify-between border-t border-ink-100/60 pt-2 text-[11px] text-ink-400">

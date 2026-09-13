@@ -148,3 +148,15 @@ Returns operational status and review flag metrics:
   "flags_logged_today": 0
 }
 ```
+
+### 4. Tool Data Encapsulation & Frequency Tiers
+The agent tools (`search_collocations`, `get_collocation_details`) strictly encapsulate internal statistical formulas:
+- Raw formulas like `pmi` and `logdice` are stripped from tool returns.
+- Items with `minmax_score < 15` (0.15) are filtered out at the database query level.
+- Minmax scores are provided on a 0–100 scale and mapped to qualitative Persian categories:
+  - $\ge 60$: **«پرتکرار»**
+  - $\ge 40$: **«متداول»**
+  - $\ge 15$: **«عادی»**
+  - $< 15$: Filtered / Hidden
+- The agent system prompt forbids presenting raw numerical metrics to end users, keeping all responses focused on authentic Persian grammar, usage registers, and qualitative frequency.
+

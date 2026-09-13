@@ -21,6 +21,15 @@ function formatTime(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function shuffleArray<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function verdictFor(percent: number): string {
   if (percent >= 80) return "عالی بود! 🎉";
   if (percent >= 50) return "خوب بود! 👏";
@@ -62,7 +71,11 @@ export function DailyChallenge() {
 
     try {
       const res = await getDailyChallenge();
-      setQuestions(res.exercises);
+      const randomized = res.exercises.map((ex) => ({
+        ...ex,
+        options: shuffleArray(ex.options),
+      }));
+      setQuestions(randomized);
 
       if (existing) {
         // Already completed today officially — show the saved result instead
@@ -121,6 +134,12 @@ export function DailyChallenge() {
 
   // "For fun" replay of the SAME 5 questions — does not touch today's saved record.
   const handlePracticeAgain = () => {
+    setQuestions((prev) =>
+      prev.map((ex) => ({
+        ...ex,
+        options: shuffleArray(ex.options),
+      }))
+    );
     setIndex(0);
     setScore(0);
     setElapsed(0);

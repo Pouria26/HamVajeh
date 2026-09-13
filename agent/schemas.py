@@ -22,13 +22,31 @@ class ChatResponse(BaseModel):
     )
 
 
+def score_to_frequency_level(score_100: float | None) -> str | None:
+    """Maps a 0-100 minmax score to a qualitative Persian frequency category.
+    Scores strictly below 15.0 are excluded/hidden (returns None).
+    """
+    if score_100 is None or score_100 < 15.0:
+        return None
+    if score_100 >= 60.0:
+        return "پرتکرار"
+    if score_100 >= 40.0:
+        return "متداول"
+    return "عادی"
+
+
 class CollocationSearchResult(BaseModel):
     id: int
     display_form: str
     pos_pattern: str | None = None
-    minmax_score: float | None = None
-    pmi: float | None = None
-    logdice: float | None = None
+    minmax_score: float | None = Field(
+        default=None,
+        description="Normalized score (0-100). Do NOT display raw numbers to user.",
+    )
+    frequency_level: str | None = Field(
+        default=None,
+        description="Qualitative frequency level: پرتکرار (>=60), متداول (>=40), عادی (>=15). None if <15.",
+    )
 
 
 class CollocationDetailResult(BaseModel):
@@ -37,9 +55,14 @@ class CollocationDetailResult(BaseModel):
     word1: str
     word2: str | None = None
     pos_pattern: str | None = None
-    pmi: float | None = None
-    logdice: float | None = None
-    minmax_score: float | None = None
+    minmax_score: float | None = Field(
+        default=None,
+        description="Normalized score (0-100). Do NOT display raw numbers to user.",
+    )
+    frequency_level: str | None = Field(
+        default=None,
+        description="Qualitative frequency level: پرتکرار (>=60), متداول (>=40), عادی (>=15). None if <15.",
+    )
     status: str | None = None
     correction_note: str | None = None
     examples: list[str] = Field(default_factory=list)
