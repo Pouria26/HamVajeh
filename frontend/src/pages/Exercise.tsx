@@ -78,14 +78,12 @@ function RandomExerciseMode() {
 
       {status === "done" && current && (
         <div className="animate-fade-in-up">
-          <p className="mb-3 text-sm text-ink-400">
-            باهم‌آیی هدف: <span className="font-semibold text-ink-600">{current.collocationDisplayForm}</span>
-          </p>
           <ExerciseQuestion
             key={key}
             exampleId={current.exampleId}
             blankSentence={current.blankSentence}
             options={current.options}
+            collocationDisplayForm={current.collocationDisplayForm}
             onResult={(isCorrect) => {
               recordExerciseAttempt(isCorrect);
               setScore((s) => ({ correct: s.correct + (isCorrect ? 1 : 0), total: s.total + 1 }));

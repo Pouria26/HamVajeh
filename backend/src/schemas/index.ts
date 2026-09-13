@@ -188,3 +188,21 @@ export const agentExplainSchema = z.object({
     example_id: positiveIntParam("example_id"),
     selected_option_id: positiveIntParam("selected_option_id"),
 });
+
+export const agentSentenceWorkshopSchema = z.object({
+    collocation_id: positiveIntParam("collocation_id"),
+    display_form: z
+        .string({ message: "missing_display_form" })
+        .trim()
+        .min(1, { message: "invalid_display_form" })
+        .max(500, { message: "invalid_display_form" }),
+});
+
+export const agentSearchAssistSchema = z.object({
+    query: z
+        .string({ message: "missing_query" })
+        .trim()
+        .min(1, { message: "invalid_query" })
+        .max(500, { message: "invalid_query" }),
+});
+

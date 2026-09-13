@@ -8,9 +8,10 @@ interface Props {
   blankSentence: string;
   options: { id: number; text: string }[];
   onResult?: (isCorrect: boolean) => void;
+  collocationDisplayForm?: string;
 }
 
-export function ExerciseQuestion({ exampleId, blankSentence, options, onResult }: Props) {
+export function ExerciseQuestion({ exampleId, blankSentence, options, onResult, collocationDisplayForm }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [result, setResult] = useState<{ isCorrect: boolean; correctAnswer: string } | null>(
     null
@@ -38,6 +39,19 @@ export function ExerciseQuestion({ exampleId, blankSentence, options, onResult }
 
   return (
     <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 pb-3">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-ink-500">
+          <span>🎯</span>
+          <span>جای خالی را با باهم‌آیی طبیعی تکمیل کنید:</span>
+        </span>
+        {result && collocationDisplayForm && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200 px-3 py-1 text-xs font-bold text-brand-700 animate-fade-in">
+            <span>✨ باهم‌آیی هدف:</span>
+            <span>{collocationDisplayForm}</span>
+          </span>
+        )}
+      </div>
+
       <p dir="rtl" className="mb-6 text-xl leading-10 text-ink-900">
         {parts[0]}
         <span

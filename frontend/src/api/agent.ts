@@ -5,6 +5,10 @@ import type {
   AgentExplainPayload,
   AgentExplainResponse,
   AgentHealthResponse,
+  SearchAssistantPayload,
+  SearchAssistantResponse,
+  SentenceWorkshopPayload,
+  SentenceWorkshopResponse,
 } from "../types";
 
 export function sendAgentChatMessage(payload: AgentChatPayload): Promise<AgentChatResponse> {
@@ -18,3 +22,16 @@ export function explainExerciseError(payload: AgentExplainPayload): Promise<Agen
 export function getAgentHealth(): Promise<AgentHealthResponse> {
   return apiClient.get<AgentHealthResponse>("/api/agent/health");
 }
+
+export function generateCollocationSentences(
+  payload: SentenceWorkshopPayload
+): Promise<SentenceWorkshopResponse> {
+  return apiClient.post<SentenceWorkshopResponse>("/api/agent/sentences", payload);
+}
+
+export function getSearchAssistantAnalysis(
+  payload: SearchAssistantPayload
+): Promise<SearchAssistantResponse> {
+  return apiClient.post<SearchAssistantResponse>("/api/agent/search-assist", payload);
+}
+

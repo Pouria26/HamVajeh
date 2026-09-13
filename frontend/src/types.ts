@@ -284,3 +284,53 @@ export interface AgentHealthResponse {
   message?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Sentence Workshop types
+// ---------------------------------------------------------------------------
+
+export type SentenceContextType = "formal" | "journalistic" | "daily";
+
+export interface GeneratedSentenceItem {
+  context_type: SentenceContextType;
+  context_title: string;
+  sentence: string;
+  explanation: string;
+}
+
+export interface SentenceWorkshopPayload {
+  collocation_id: number;
+  display_form: string;
+}
+
+export interface SentenceWorkshopResponse {
+  collocation_id: number;
+  display_form: string;
+  sentences: GeneratedSentenceItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Search Assistant types
+// ---------------------------------------------------------------------------
+
+export type SearchAssistantStatusType =
+  | "unnatural_combination"
+  | "compound_word"
+  | "colloquial"
+  | "valid_not_in_db"
+  | "free_combination";
+
+export interface SearchAssistantPayload {
+  query: string;
+}
+
+export interface SearchAssistantResponse {
+  query: string;
+  status_type: SearchAssistantStatusType;
+  badge_label: string;
+  summary: string;
+  linguistic_analysis: string;
+  suggested_collocations: string[];
+  example_sentence: string | null;
+}
+
+

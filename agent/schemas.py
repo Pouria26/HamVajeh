@@ -129,3 +129,69 @@ class AuditJudgment(BaseModel):
     confidence: Literal["low", "medium", "high"]
     linguistic_reasoning: str
     flag_for_review: bool
+
+
+class GeneratedSentenceItem(BaseModel):
+    """A sentence generated in a specific linguistic register."""
+
+    context_type: Literal["formal", "journalistic", "daily"] = Field(
+        description="Register/context: formal (اداری/رسمی), journalistic (مطبوعاتی/تحلیلی), daily (روزمره/داستانی)"
+    )
+    context_title: str = Field(
+        description="User-facing Persian title of the context (e.g., 'بافت رسمی / اداری')"
+    )
+    sentence: str = Field(
+        description="Realistic Persian sentence naturally incorporating the target collocation"
+    )
+    explanation: str = Field(
+        description="Concise Persian explanation highlighting how the collocation functions in this register"
+    )
+
+
+class SentenceWorkshopRequest(BaseModel):
+    collocation_id: int = Field(..., description="ID of the collocation")
+    display_form: str = Field(..., min_length=1, description="Persian display form of the collocation")
+
+
+class SentenceWorkshopResponse(BaseModel):
+    collocation_id: int
+    display_form: str
+    sentences: list[GeneratedSentenceItem] = Field(
+        default_factory=list,
+        description="Exactly 3 sentences representing formal, journalistic, and daily contexts",
+    )
+
+
+class SearchAssistantRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="User search query that yielded 0 statistical results")
+
+
+class SearchAssistantResponse(BaseModel):
+    query: str
+    status_type: Literal[
+        "unnatural_combination",
+        "compound_word",
+        "colloquial",
+        "valid_not_in_db",
+        "free_combination",
+    ] = Field(
+        description="Categorization of the queried phrase"
+    )
+    badge_label: str = Field(
+        description="Short Persian badge label (e.g., 'ترکیب نامأنوس', 'اسم مرکب', 'اصطلاح محاوره‌ای', 'باهم‌آیی اصیل خارج از پایگاه')"
+    )
+    summary: str = Field(
+        description="One or two prominent Persian sentences explaining the core takeaway"
+    )
+    linguistic_analysis: str = Field(
+        description="In-depth Persian educational explanation of syntax, semantics, and native speaker conventions"
+    )
+    suggested_collocations: list[str] = Field(
+        default_factory=list,
+        description="List of authentic Persian collocations or natural alternatives"
+    )
+    example_sentence: str | None = Field(
+        default=None,
+        description="An authentic example sentence showing correct usage of the suggested alternative"
+    )
+

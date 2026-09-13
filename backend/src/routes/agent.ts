@@ -1,6 +1,11 @@
 import { Router, Request, Response } from "express";
 import { validateRequest } from "../middleware/validate";
-import { agentChatSchema, agentExplainSchema } from "../schemas";
+import {
+    agentChatSchema,
+    agentExplainSchema,
+    agentSearchAssistSchema,
+    agentSentenceWorkshopSchema,
+} from "../schemas";
 
 export const agentRouter = Router();
 
@@ -93,6 +98,32 @@ agentRouter.post(
     validateRequest({ body: agentExplainSchema }),
     async (req: Request, res: Response): Promise<void> => {
         const result = await forwardToAgent("/explain", "POST", req.body);
+        res.status(result.status).json(result.data);
+    }
+);
+
+/**
+ * POST /api/agent/sentences
+ * Generates 3 practical sentences in 3 registers (formal, journalistic, daily) for a collocation.
+ */
+agentRouter.post(
+    "/sentences",
+    validateRequest({ body: agentSentenceWorkshopSchema }),
+    async (req: Request, res: Response): Promise<void> => {
+        const result = await forwardToAgent("/sentences", "POST", req.body);
+        res.status(result.status).json(result.data);
+    }
+);
+
+/**
+ * POST /api/agent/search-assist
+ * Provides educational linguistic analysis and suggestions for queries yielding 0 statistical results.
+ */
+agentRouter.post(
+    "/search-assist",
+    validateRequest({ body: agentSearchAssistSchema }),
+    async (req: Request, res: Response): Promise<void> => {
+        const result = await forwardToAgent("/search-assist", "POST", req.body);
         res.status(result.status).json(result.data);
     }
 );

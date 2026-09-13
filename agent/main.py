@@ -25,11 +25,22 @@ from agent import (
     build_chatbot_agent,
     build_exercise_agent,
     build_model,
+    build_search_assistant_agent,
+    build_sentence_workshop_agent,
     format_chat_prompt,
     render_exercise_context,
 )
 from db import Database
-from schemas import ChatRequest, ChatResponse, ExerciseJudgment
+from schemas import (
+    ChatRequest,
+    ChatResponse,
+    ExerciseJudgment,
+    GeneratedSentenceItem,
+    SearchAssistantRequest,
+    SearchAssistantResponse,
+    SentenceWorkshopRequest,
+    SentenceWorkshopResponse,
+)
 from settings import get_settings
 
 settings = get_settings()
@@ -46,6 +57,8 @@ class AppState:
     chatbot_agent: object
     exercise_agent: object
     audit_agent: object
+    sentence_workshop_agent: object
+    search_assistant_agent: object
 
 
 state = AppState()
@@ -61,6 +74,8 @@ async def lifespan(app: FastAPI):
     state.chatbot_agent = build_chatbot_agent(model)
     state.exercise_agent = build_exercise_agent(model)
     state.audit_agent = build_audit_agent(model)
+    state.sentence_workshop_agent = build_sentence_workshop_agent(model)
+    state.search_assistant_agent = build_search_assistant_agent(model)
 
     yield
 
@@ -89,6 +104,8 @@ async def root() -> dict:
         "endpoints": {
             "chat": "POST /chat",
             "explain": "POST /explain",
+            "sentences": "POST /sentences",
+            "search-assist": "POST /search-assist",
             "health": "GET /health",
         },
     }
@@ -220,6 +237,109 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
         raise HTTPException(
             status_code=500,
             detail=f"Exercise explanation failed: {str(e)}",
+        )
+
+
+SENTENCE_WORKSHOP_LIMITS = UsageLimits(request_limit=5)
+
+
+@app.post("/sentences", response_model=SentenceWorkshopResponse)
+async def generate_sentences(payload: SentenceWorkshopRequest) -> SentenceWorkshopResponse:
+    """Generates 3 practical sentences in 3 distinct registers (formal, journalistic, daily) for a collocation."""
+    # 1) Check exact-match cache by collocation_id
+    cached = await state.db.get_cached_sentences(payload.collocation_id)
+    if cached is not None:
+        return cached
+
+    prompt = (
+        f"باهم‌آیی هدف برای کارگاه جمله‌ساز:\n«{payload.display_form}»\n\n"
+        "لطفاً دقیقاً ۳ جمله ملموس، زیبا و اصیل به همراه توضیح در ۳ بافت کاربردی "
+        "(رسمی/اداری، مطبوعاتی/تحلیلی، روزمره/داستانی) تولید کن."
+    )
+
+    try:
+        result = await state.sentence_workshop_agent.run(prompt, usage_limits=SENTENCE_WORKSHOP_LIMITS)
+        response: SentenceWorkshopResponse = result.output
+        response.collocation_id = payload.collocation_id
+        response.display_form = payload.display_form
+
+        # 2) Cache the generated sentences in Postgres
+        await state.db.store_cached_sentences(payload.collocation_id, payload.display_form, response)
+        return response
+    except Exception as e:
+        logfire.error("Sentence workshop generation failed: {error}", error=str(e))
+        # Direct graceful linguistic fallback so user always receives a response
+        return SentenceWorkshopResponse(
+            collocation_id=payload.collocation_id,
+            display_form=payload.display_form,
+            sentences=[
+                GeneratedSentenceItem(
+                    context_type="formal",
+                    context_title="بافت رسمی و اداری",
+                    sentence=f"هیئت‌مدیره در نشست اخیر، پیرامون تمدید قراردادها به «{payload.display_form}» مبادرت ورزید.",
+                    explanation=f"کاربرد باهم‌آیی «{payload.display_form}» در نامه‌نگاری و مکاتبات سازمانی، رویکردی رسمی و مستند را بازتاب می‌دهد.",
+                ),
+                GeneratedSentenceItem(
+                    context_type="journalistic",
+                    context_title="بافت مطبوعاتی و تحلیلی",
+                    sentence=f"کارشناسان اقتصادی بر این باورند که در شرایط کنونی، باهم‌آیی و فرآیند «{payload.display_form}» می‌تواند ثبات بازار را تضمین کند.",
+                    explanation=f"در زبان مطبوعات و مقالات تحلیلی، عبارت «{payload.display_form}» به تقویت بار استدلالی و استحکام متن یاری می‌رساند.",
+                ),
+                GeneratedSentenceItem(
+                    context_type="daily",
+                    context_title="بافت روزمره و روایی",
+                    sentence=f"بعد از مدت‌ها فکر کردن و مشورت با دوستان، بالاخره درباره این موضوع به «{payload.display_form}» رسیدیم.",
+                    explanation=f"در گفتگوی روزمره و بیان روایت‌های فردی، استفاده از «{payload.display_form}» کلام را طبیعی و دلنشین می‌سازد.",
+                ),
+            ],
+        )
+
+
+SEARCH_ASSIST_LIMITS = UsageLimits(request_limit=5)
+
+
+@app.post("/search-assist", response_model=SearchAssistantResponse)
+async def search_assist(payload: SearchAssistantRequest) -> SearchAssistantResponse:
+    """Provides instant linguistic guidance when a user query returns 0 statistical results in the database."""
+    query_cleaned = " ".join(payload.query.strip().split())
+    query_hash = hashlib.sha256(query_cleaned.encode("utf-8")).hexdigest()
+
+    # 1) Check exact-match cache
+    cached = await state.db.get_cached_search_assistant(query_hash)
+    if cached is not None:
+        return cached
+
+    prompt = (
+        f"عبارت جستجوشده توسط کاربر که در پایگاه ثبت نشده است:\n«{query_cleaned}»\n\n"
+        "لطفاً ساختار زبانی این عبارت را تحلیل کن و مشخص کن آیا این یک ترکیب نامأنوس است، یا واژه مرکب، یا اصطلاح عامیانه، یا ترکیب آزاد، و یا باهم‌آیی اصیلی است که صرفاً در پیکره موجود نبوده است. "
+        "سپس معادل‌ها یا باهم‌آیی‌های اصیل و رایج در زبان فارسی را به همراه یک جمله نمونه ارائه بده."
+    )
+
+    try:
+        result = await state.search_assistant_agent.run(prompt, usage_limits=SEARCH_ASSIST_LIMITS)
+        response: SearchAssistantResponse = result.output
+        response.query = query_cleaned
+
+        # 2) Cache the response in Postgres
+        await state.db.store_cached_search_assistant(query_hash, query_cleaned, response)
+        return response
+    except Exception as e:
+        logfire.error("Search assistant analysis failed: {error}", error=str(e))
+        # Direct graceful linguistic fallback
+        return SearchAssistantResponse(
+            query=query_cleaned,
+            status_type="unnatural_combination",
+            badge_label="تحلیل هوشمند همیار",
+            summary=f"عبارت «{query_cleaned}» به این شکل در پیکره ثبتی هم‌واژه موجود نیست و ممکن است یک ترکیب غیرمعمول، گفتاری یا کلمه مرکب باشد.",
+            linguistic_analysis=(
+                f"در زبان فارسی، واژه‌ها بر اساس پیوندهای هم‌آیی مقید با یکدیگر ترکیب می‌شوند. "
+                f"اگر مقصود شما مفهومی نزدیک به این عبارت است، اهل زبان معمولاً از همنشین‌های اصیل و گوش‌نواز دیگری استفاده می‌کنند."
+            ),
+            suggested_collocations=[
+                "بررسی باهم‌آیی‌های هم‌معنی",
+                "جستجوی واژه اصلی در بخش جستجو",
+            ],
+            example_sentence=None,
         )
 
 

@@ -23,6 +23,8 @@ from schemas import (
     CollocationSearchResult,
     ExerciseEvidence,
     ExerciseJudgment,
+    SearchAssistantResponse,
+    SentenceWorkshopResponse,
     score_to_frequency_level,
 )
 
@@ -46,6 +48,20 @@ CREATE TABLE IF NOT EXISTS agent_flags (
 CREATE TABLE IF NOT EXISTS chat_cache (
     query_hash      TEXT PRIMARY KEY,
     user_message    TEXT NOT NULL,
+    response_json   JSONB NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sentence_workshop_cache (
+    collocation_id  INTEGER PRIMARY KEY,
+    display_form    TEXT NOT NULL,
+    response_json   JSONB NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS search_assistant_cache (
+    query_hash      TEXT PRIMARY KEY,
+    query_text      TEXT NOT NULL,
     response_json   JSONB NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -285,4 +301,61 @@ class Database:
         """
         async with self.pool.acquire() as conn:
             await conn.execute(sql, query_hash, user_message, response.model_dump_json())
+
+    async def get_cached_sentences(
+        self, collocation_id: int
+    ) -> SentenceWorkshopResponse | None:
+        """Retrieves cached generated sentences for a collocation ID."""
+        sql = "SELECT response_json FROM sentence_workshop_cache WHERE collocation_id = $1;"
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(sql, collocation_id)
+        if row is None:
+            return None
+        return SentenceWorkshopResponse.model_validate_json(row["response_json"])
+
+    async def store_cached_sentences(
+        self, collocation_id: int, display_form: str, response: SentenceWorkshopResponse
+    ) -> None:
+        """Stores generated sentences in sentence_workshop_cache."""
+        sql = """
+        INSERT INTO sentence_workshop_cache (collocation_id, display_form, response_json)
+        VALUES ($1, $2, $3::jsonb)
+        ON CONFLICT (collocation_id) DO UPDATE
+        SET response_json = EXCLUDED.response_json,
+            display_form = EXCLUDED.display_form,
+            created_at = now();
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                sql, collocation_id, display_form, response.model_dump_json()
+            )
+
+    async def get_cached_search_assistant(
+        self, query_hash: str
+    ) -> SearchAssistantResponse | None:
+        """Retrieves cached search assistant analysis by query hash."""
+        sql = "SELECT response_json FROM search_assistant_cache WHERE query_hash = $1;"
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(sql, query_hash)
+        if row is None:
+            return None
+        return SearchAssistantResponse.model_validate_json(row["response_json"])
+
+    async def store_cached_search_assistant(
+        self, query_hash: str, query_text: str, response: SearchAssistantResponse
+    ) -> None:
+        """Stores search assistant analysis in search_assistant_cache."""
+        sql = """
+        INSERT INTO search_assistant_cache (query_hash, query_text, response_json)
+        VALUES ($1, $2, $3::jsonb)
+        ON CONFLICT (query_hash) DO UPDATE
+        SET response_json = EXCLUDED.response_json,
+            query_text = EXCLUDED.query_text,
+            created_at = now();
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                sql, query_hash, query_text, response.model_dump_json()
+            )
+
 

@@ -242,16 +242,13 @@ export function DailyChallenge() {
         />
       </div>
 
-      <p className="mb-3 text-sm text-ink-400">
-        باهم‌آیی هدف: <span className="font-semibold text-ink-600">{current.collocationDisplayForm}</span>
-      </p>
-
       <ExerciseQuestion
         key={current.exampleId}
         exampleId={current.exampleId}
         blankSentence={current.blankSentence}
         options={current.options}
         onResult={handleResult}
+        collocationDisplayForm={current.collocationDisplayForm}
       />
 
       <button

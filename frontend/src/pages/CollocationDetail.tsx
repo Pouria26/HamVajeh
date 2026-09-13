@@ -8,6 +8,7 @@ import { CollocationCard } from "../components/CollocationCard";
 import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
 import { ReportModal, ReportTrigger } from "../components/ReportModal";
+import { SentenceWorkshop } from "../components/SentenceWorkshop";
 import type { CollocationDetailResponse, CollocationSummary } from "../types";
 
 export function CollocationDetail() {
@@ -142,6 +143,11 @@ export function CollocationDetail() {
           </ul>
         )}
       </div>
+
+      <SentenceWorkshop
+        collocationId={collocation.id}
+        displayForm={collocation.display_form}
+      />
 
       {relatedStatus !== "error" && (relatedStatus === "loading" || related.length > 0) && (
         <div className="mt-10">

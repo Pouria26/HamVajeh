@@ -5,6 +5,7 @@ import { SearchBox } from "../components/SearchBox";
 import { CollocationCard } from "../components/CollocationCard";
 import { SearchResultsSkeleton } from "../components/ui/Spinner";
 import { EmptyState, ErrorState } from "../components/ui/States";
+import { SearchAssistantCard } from "../components/SearchAssistantCard";
 import type { CollocationSummary } from "../types";
 
 export function Search() {
@@ -61,11 +62,16 @@ export function Search() {
         {status === "error" && <ErrorState onRetry={() => runSearch(query)} />}
 
         {status === "done" && results.length === 0 && (
-          <EmptyState
-            icon="🤔"
-            title="چیزی پیدا نشد"
-            description="برای این واژه باهم‌آیی معتبری در دیتابیس ثبت نشده است."
-          />
+          <div className="flex flex-col gap-4">
+            <SearchAssistantCard
+              query={query}
+              onSelectCollocation={(suggested) => {
+                setQuery(suggested);
+                setSearchParams({ q: suggested }, { replace: true });
+                runSearch(suggested);
+              }}
+            />
+          </div>
         )}
 
         {status === "done" && results.length > 0 && (
