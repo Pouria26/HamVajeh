@@ -4,7 +4,7 @@
   "description": "Backend for the HamVajeh Persian collocation learning system",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "init-schema": "ts-node src/db/initSchema.ts",
     "import-csv": "ts-node src/importDataset.ts",
     "dev": "ts-node src/index.ts",

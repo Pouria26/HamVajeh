@@ -4,6 +4,7 @@ import { pool } from "./db/pool";
 import { collocationsRouter } from "./routes/collocations";
 import { exercisesRouter } from "./routes/exercises";
 import { adminRouter } from "./routes/admin";
+import { agentRouter } from "./routes/agent";
 import { requireAdminAuth } from "./middleware/adminAuth";
 
 // This file only builds the app; it does not call listen(). This makes the
@@ -57,6 +58,19 @@ export function createApp() {
         message: { error: "rate_limit_exceeded", message: "Too many reports submitted, please try again later." },
     });
 
+    // Rate limiter for AI agent endpoints (protects LLM quota & prevents abuse)
+    const agentLimiter = rateLimit({
+        windowMs: 60 * 1000,
+        max: 20,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skip: () => isTestEnv,
+        message: {
+            error: "rate_limit_exceeded",
+            message: "تعداد درخواست‌های ارسالی به دستیار بیش از حد مجاز است. لطفاً کمی بعد دوباره امتحان کنید.",
+        },
+    });
+
     app.get("/health", async (_req, res) => {
         try {
             await pool.query("SELECT 1");
@@ -73,6 +87,7 @@ export function createApp() {
     app.use("/api/collocations", collocationsRouter);
     app.use("/api/exercises", exercisesRouter);
     app.use("/api/admin", requireAdminAuth, adminRouter);
+    app.use("/api/agent", agentLimiter, agentRouter);
 
     return app;
 }

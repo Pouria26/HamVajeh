@@ -159,3 +159,32 @@ export const adminPatchReportSchema = z.object({
         message: "invalid_status",
     }),
 });
+
+// ---------------------------------------------------------------------------
+// Agent Schemas
+// ---------------------------------------------------------------------------
+
+export const agentChatSchema = z.object({
+    message: z
+        .string({ message: "missing_message" })
+        .trim()
+        .min(1, { message: "invalid_message" })
+        .max(2000, { message: "invalid_message" }),
+    history: z
+        .array(
+            z.object({
+                role: z.enum(["user", "assistant"], { message: "invalid_role" }),
+                content: z
+                    .string()
+                    .min(1, { message: "invalid_history" })
+                    .max(4000, { message: "invalid_history" }),
+            })
+        )
+        .optional()
+        .default([]),
+});
+
+export const agentExplainSchema = z.object({
+    example_id: positiveIntParam("example_id"),
+    selected_option_id: positiveIntParam("selected_option_id"),
+});
