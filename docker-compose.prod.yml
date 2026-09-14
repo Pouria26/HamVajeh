@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hamvajeh-postgres-prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hamvajeh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hamvajeh}
+      POSTGRES_DB: ${POSTGRES_DB:-hamvajeh}
+    volumes:
+      - hamvajeh_pgdata:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hamvajeh} -d ${POSTGRES_DB:-hamvajeh}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - hamvajeh-network
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: hamvajeh-agent-prod
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-hamvajeh}:${POSTGRES_PASSWORD:-hamvajeh}@postgres:5432/${POSTGRES_DB:-hamvajeh}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
+      PORT: 8001
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://backend:3000,http://frontend:80
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - hamvajeh-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hamvajeh-backend-prod
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-hamvajeh}:${POSTGRES_PASSWORD:-hamvajeh}@postgres:5432/${POSTGRES_DB:-hamvajeh}
+      AGENT_SERVICE_URL: http://agent:8001
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-hamvajeh-super-secret-admin-token}
+      FRONTEND_URL: ${FRONTEND_URL:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - hamvajeh-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+    container_name: hamvajeh-frontend-prod
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - hamvajeh-network
+
+volumes:
+  hamvajeh_pgdata:
+    name: backend_hamvajeh_pgdata
+
+networks:
+  hamvajeh-network:
+    driver: bridge

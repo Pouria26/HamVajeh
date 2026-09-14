@@ -13,6 +13,9 @@ import { requireAdminAuth } from "./middleware/adminAuth";
 export function createApp() {
     const app = express();
 
+    // Trust first hop reverse proxy (Nginx) for client IP detection in rate limiters
+    app.set("trust proxy", 1);
+
     app.use(express.json({ limit: "50kb" }));
     app.use(helmet());
 

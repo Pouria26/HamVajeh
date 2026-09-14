@@ -1,0 +1,9 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!*.example
+.pytest_cache/
+test_cases.py

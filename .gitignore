@@ -27,8 +27,16 @@ dist-ssr
 .env
 .env.*
 !.env.example
+!.env.*.example
 
-# Datasets and Archives
+# Datasets, Database dumps, and Archives
+*.sql
+*.sql.gz
+*.dump
+docker/postgres/*.sql
+docker/postgres/*.sql.gz
+docker/backups/
+backups/
 Dataset/
 *.csv
 *.tsv
@@ -76,4 +84,10 @@ coverage/
 Thumbs.db
 ehthumbs.db
 [Dd]esktop.ini
+
+# Agent internal instructions & planning
+AGENTS.md
+IMPLEMENTATION_PLAN.md
+*.diff
+
 
