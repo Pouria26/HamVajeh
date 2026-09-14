@@ -60,6 +60,7 @@ export interface ExerciseOption {
 
 export interface DailyChallengeQuestion {
   exampleId: number;
+  collocationId?: number;
   collocationDisplayForm: string;
   blankSentence: string;
   options: ExerciseOption[];

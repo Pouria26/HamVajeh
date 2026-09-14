@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getSearchAssistantAnalysis } from "../api/agent";
 import { Spinner } from "./ui/Spinner";
+import { MarkdownContent } from "./MarkdownContent";
 import type { SearchAssistantResponse, SearchAssistantStatusType } from "../types";
 
 interface SearchAssistantCardProps {
@@ -147,12 +148,12 @@ export function SearchAssistantCard({
 
           {/* Summary Box */}
           <div className="mt-4 rounded-xl bg-brand-50/70 p-4 text-sm font-semibold leading-7 text-brand-900">
-            {analysis.summary}
+            <MarkdownContent content={analysis.summary} className="text-brand-900" />
           </div>
 
           {/* Detailed Linguistic Analysis */}
-          <div className="mt-4 text-sm leading-7 text-ink-700 whitespace-pre-line">
-            {analysis.linguistic_analysis}
+          <div className="mt-4 text-sm leading-7 text-ink-700">
+            <MarkdownContent content={analysis.linguistic_analysis} />
           </div>
 
           {/* Suggested Authentic Collocations */}

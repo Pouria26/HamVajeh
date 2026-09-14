@@ -10,6 +10,7 @@ Gemini API key is kept strictly on the backend.
 """
 
 import os
+import logging
 from contextlib import asynccontextmanager
 
 import logfire
@@ -67,11 +68,16 @@ state = AppState()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger = logging.getLogger("hamvajeh-agent")
     settings = get_settings()
     state.db = await Database.connect(settings.database_url)
     await state.db.ensure_agent_tables()
 
-    model = build_model(settings.google_api_key)
+    model = build_model(settings.google_api_key, settings.nvidia_api_key)
+    logger.info(
+        "3-Tier FallbackModel initialized: gemini-3.5-flash-lite -> gemini-3.1-flash-lite -> %s",
+        "moonshotai/kimi-k3 (NVIDIA NIM)" if settings.nvidia_api_key else "(Kimi K3 inactive: NVIDIA_API_KEY not set)",
+    )
     state.chatbot_agent = build_chatbot_agent(model)
     state.exercise_agent = build_exercise_agent(model)
     state.audit_agent = build_audit_agent(model)
@@ -84,7 +90,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="HamVajeh Persian Collocation AI Agent", lifespan=lifespan)
-logfire.instrument_fastapi(app)
+# Note: logfire.instrument_fastapi is intentionally omitted to avoid polluting
+# the Logfire dashboard with recurring Docker healthchecks (GET /health every 10s).
+# Only actual LLM agent calls (via instrument_pydantic_ai and targeted spans) are recorded.
 
 # CORS: The agent is an internal microservice accessed only by the Node.js
 # backend, not by browsers directly. Allow env override for production proxy
@@ -145,9 +153,10 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     # 2) Execute Pydantic AI agent with real database tools and FallbackModel chain
     try:
         prompt = format_chat_prompt(payload.message, payload.history)
-        result = await state.chatbot_agent.run(
-            prompt, deps=AgentDeps(db=state.db), usage_limits=CHAT_USAGE_LIMITS
-        )
+        with logfire.span("هم‌یار - چت کاربر: {query}", query=payload.message):
+            result = await state.chatbot_agent.run(
+                prompt, deps=AgentDeps(db=state.db), usage_limits=CHAT_USAGE_LIMITS
+            )
         response: ChatResponse = result.output
 
         # 3) Store initial query in PostgreSQL cache for instant subsequent hits
@@ -228,7 +237,8 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
     # 3) Ask the agent with resilient model chain and usage limit
     try:
         context = render_exercise_context(evidence)
-        result = await state.exercise_agent.run(context, usage_limits=EXPLAIN_USAGE_LIMITS)
+        with logfire.span("هم‌یار - تحلیل تمرین: {sentence}", sentence=evidence.blank_sentence):
+            result = await state.exercise_agent.run(context, usage_limits=EXPLAIN_USAGE_LIMITS)
         judgment: ExerciseJudgment = result.output
 
         # 4) Persist: cache the answer, and log a flag if the agent flagged it for review
@@ -270,7 +280,8 @@ async def generate_sentences(payload: SentenceWorkshopRequest) -> SentenceWorksh
     )
 
     try:
-        result = await state.sentence_workshop_agent.run(prompt, usage_limits=SENTENCE_WORKSHOP_LIMITS)
+        with logfire.span("هم‌یار - کارگاه جمله‌ساز: {collocation}", collocation=payload.display_form):
+            result = await state.sentence_workshop_agent.run(prompt, usage_limits=SENTENCE_WORKSHOP_LIMITS)
         response: SentenceWorkshopResponse = result.output
         response.collocation_id = payload.collocation_id
         response.display_form = payload.display_form
@@ -322,13 +333,14 @@ async def search_assist(payload: SearchAssistantRequest) -> SearchAssistantRespo
         return cached
 
     prompt = (
-        f"عبارت جستجوشده توسط کاربر که در پایگاه ثبت نشده است:\n«{query_cleaned}»\n\n"
-        "لطفاً ساختار زبانی این عبارت را تحلیل کن و مشخص کن آیا این یک ترکیب نامأنوس است، یا واژه مرکب، یا اصطلاح عامیانه، یا ترکیب آزاد، و یا باهم‌آیی اصیلی است که صرفاً در پیکره موجود نبوده است. "
-        "سپس معادل‌ها یا باهم‌آیی‌های اصیل و رایج در زبان فارسی را به همراه یک جمله نمونه ارائه بده."
+        f"عبارت جستجوشده توسط کاربر در سامانه:\n«{query_cleaned}»\n\n"
+        "این عبارت ممکن است یک باهم‌آیی فارسی، عبارت عامیانه، واژه مرکب، غلط املایی، گرته‌برداری، فینگلیش، خطای کیبورد انگلیسی (QWERTY)، یا واژه/سوال به زبان انگلیسی باشد. "
+        "لطفاً بر اساس تخصص زبان‌شناسی خود، وضعیت عبارت را تحلیل کن و معادل‌ها یا باهم‌آیی‌های اصیل، اصطلاحی و رایج در زبان فارسی را به همراه یک جمله نمونه کاربردی و بی‌نقص ارائه بده."
     )
 
     try:
-        result = await state.search_assistant_agent.run(prompt, usage_limits=SEARCH_ASSIST_LIMITS)
+        with logfire.span("هم‌یار - تحلیل جستجو: {query}", query=query_cleaned):
+            result = await state.search_assistant_agent.run(prompt, usage_limits=SEARCH_ASSIST_LIMITS)
         response: SearchAssistantResponse = result.output
         response.query = query_cleaned
 

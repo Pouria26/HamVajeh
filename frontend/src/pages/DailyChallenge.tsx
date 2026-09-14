@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getDailyChallenge } from "../api/exercises";
 import { ExerciseQuestion } from "../components/ExerciseQuestion";
+import { ReportModal, ReportTrigger } from "../components/ReportModal";
 import { Spinner } from "../components/ui/Spinner";
 import { ErrorState } from "../components/ui/States";
 import {
@@ -46,6 +47,7 @@ export function DailyChallenge() {
   const [score, setScore] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [shareLabel, setShareLabel] = useState("اشتراک‌گذاری نتیجه");
+  const [reporting, setReporting] = useState(false);
 
   // Whether the score being shown/played counts as today's official record,
   // or is just a for-fun replay of the same 5 questions (doesn't overwrite it).
@@ -111,6 +113,7 @@ export function DailyChallenge() {
   };
 
   const handleNext = () => {
+    setReporting(false);
     if (index + 1 >= questions.length) {
       if (timerRef.current) clearInterval(timerRef.current);
       const finalElapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
@@ -257,6 +260,18 @@ export function DailyChallenge() {
       >
         {index + 1 === questions.length ? "پایان چالش 🏁" : "سؤال بعدی ←"}
       </button>
+
+      <div className="mt-3">
+        <ReportTrigger onClick={() => setReporting(true)} label="گزارش خطا در این سؤال" variant="outline" />
+      </div>
+
+      {reporting && current && (
+        <ReportModal
+          collocationId={current.collocationId ?? 0}
+          exampleId={current.exampleId}
+          onClose={() => setReporting(false)}
+        />
+      )}
     </div>
   );
 }

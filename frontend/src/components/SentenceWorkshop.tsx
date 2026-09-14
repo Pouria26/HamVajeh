@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { generateCollocationSentences } from "../api/agent";
 import { Spinner } from "./ui/Spinner";
+import { MarkdownContent } from "./MarkdownContent";
 import type { GeneratedSentenceItem, SentenceContextType } from "../types";
 
 interface SentenceWorkshopProps {
@@ -224,7 +225,7 @@ export function SentenceWorkshop({ collocationId, displayForm }: SentenceWorksho
                 {item.explanation && (
                   <div className="mt-3 flex items-start gap-2 rounded-lg bg-ink-50 p-2.5 text-xs leading-6 text-ink-600">
                     <span className="shrink-0 text-sm">💡</span>
-                    <span>{item.explanation}</span>
+                    <MarkdownContent content={item.explanation} className="text-xs leading-6 text-ink-600 flex-1" />
                   </div>
                 )}
               </div>

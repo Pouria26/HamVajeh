@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { explainExerciseError } from "../api/agent";
 import { Spinner } from "./ui/Spinner";
+import { MarkdownContent } from "./MarkdownContent";
 import type { AgentExplainResponse } from "../types";
 
 interface Props {
@@ -159,8 +160,8 @@ export function ExerciseExplanationCard({
                 )}
               </div>
 
-              <div className="rounded-xl bg-white/90 p-4 border border-ink-100 text-sm leading-7 text-ink-800 shadow-2xs">
-                <p className="whitespace-pre-line">{data.user_facing_answer}</p>
+              <div className="rounded-xl bg-white/90 p-4 border border-ink-100 shadow-2xs">
+                <MarkdownContent content={data.user_facing_answer} />
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">

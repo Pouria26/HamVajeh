@@ -80,6 +80,7 @@ exercisesRouter.get("/daily-challenge", async (_req: Request, res: Response) => 
             date,
             exercises: exampleRows.map((e) => ({
                 exampleId: e.id,
+                collocationId: e.collocation_id,
                 collocationDisplayForm: e.display_form,
                 blankSentence: e.blank_sentence,
                 options: optionsByExample.get(e.id) ?? [],
