@@ -34,23 +34,8 @@ export function Home() {
   }, []);
 
   useEffect(() => {
-    let ignore = false;
-    getFeaturedCollocations(6)
-      .then((res) => {
-        if (!ignore) {
-          setFeatured(res.results);
-          setStatus("done");
-        }
-      })
-      .catch(() => {
-        if (!ignore) {
-          setStatus("error");
-        }
-      });
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    loadFeatured();
+  }, [loadFeatured]);
 
   const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : null;
 

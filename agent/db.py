@@ -201,7 +201,7 @@ class Database:
         WHERE (display_form ILIKE '%' || $1 || '%'
            OR word1 ILIKE '%' || $1 || '%'
            OR word2 ILIKE '%' || $1 || '%')
-          AND (minmax_score IS NULL OR minmax_score >= 0.15)
+          AND minmax_score >= 0.15
         ORDER BY
            (display_form ILIKE $1 || '%') DESC,
            minmax_score DESC NULLS LAST
@@ -358,4 +358,24 @@ class Database:
                 sql, query_hash, query_text, response.model_dump_json()
             )
 
+    async def purge_stale_caches(self, max_age_days: int = 30) -> dict[str, int]:
+        """Delete cache entries older than *max_age_days*.
 
+        Returns a mapping of table name → number of rows deleted so callers
+        (e.g. an admin endpoint or a scheduled task) can log the results.
+        """
+        tables = [
+            "chat_cache",
+            "agent_cache",
+            "sentence_workshop_cache",
+            "search_assistant_cache",
+        ]
+        results: dict[str, int] = {}
+        async with self.pool.acquire() as conn:
+            for table in tables:
+                tag = await conn.execute(
+                    f"DELETE FROM {table} WHERE created_at < now() - interval '{max_age_days} days'"
+                )
+                # asyncpg returns e.g. "DELETE 42"
+                results[table] = int(tag.split()[-1])
+        return results

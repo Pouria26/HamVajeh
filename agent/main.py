@@ -9,6 +9,7 @@ http://127.0.0.1:8001/chat and http://127.0.0.1:8001/explain), so the
 Gemini API key is kept strictly on the backend.
 """
 
+import os
 from contextlib import asynccontextmanager
 
 import logfire
@@ -85,9 +86,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="HamVajeh Persian Collocation AI Agent", lifespan=lifespan)
 logfire.instrument_fastapi(app)
 
+# CORS: The agent is an internal microservice accessed only by the Node.js
+# backend, not by browsers directly. Allow env override for production proxy
+# setups; default to localhost origins for safe local development.
+_cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:4000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in _cors_origins.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,6 +114,13 @@ async def root() -> dict:
             "health": "GET /health",
         },
     }
+
+
+@app.post("/admin/purge-cache")
+async def purge_cache(max_age_days: int = 30) -> dict:
+    """Delete cache entries older than the specified number of days."""
+    results = await state.db.purge_stale_caches(max_age_days)
+    return {"purged": results, "max_age_days": max_age_days}
 
 
 def compute_chat_cache_key(message: str) -> str:

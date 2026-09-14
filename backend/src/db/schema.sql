@@ -36,8 +36,10 @@ CREATE TABLE collocations (
 CREATE INDEX idx_collocations_word1 ON collocations(word1);
 CREATE INDEX idx_collocations_minmax ON collocations(minmax_score DESC);
 
--- Fuzzy / substring search support (used by the search endpoint)
+-- Fuzzy / substring search support (used by the search and agent endpoints)
 CREATE INDEX idx_collocations_display_trgm ON collocations USING gin (display_form gin_trgm_ops);
+CREATE INDEX idx_collocations_word1_trgm ON collocations USING gin (word1 gin_trgm_ops);
+CREATE INDEX idx_collocations_word2_trgm ON collocations USING gin (word2 gin_trgm_ops) WHERE word2 IS NOT NULL;
 
 CREATE TABLE examples (
     id              SERIAL PRIMARY KEY,

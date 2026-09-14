@@ -258,7 +258,12 @@ collocationsRouter.get(
     try {
         const { rows: collocationRows } = await pool.query(
             `SELECT id, pair_id, display_form, word1, word2, pos_pattern,
-                    pmi, t_score, llr, logdice, combined_score, minmax_score
+                    minmax_score,
+                    CASE
+                        WHEN minmax_score >= 0.6 THEN 'پرتکرار'
+                        WHEN minmax_score >= 0.4 THEN 'متداول'
+                        ELSE 'عادی'
+                    END AS frequency_level
              FROM collocations
              WHERE id = $1 AND minmax_score >= $2`,
             [id, PUBLIC_MIN_SCORE]

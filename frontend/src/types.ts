@@ -34,12 +34,8 @@ export interface CollocationDetail {
   word2: string | null;
   pos_pattern: string | null;
   pattern_category_label: string;
-  pmi: number | null;
-  t_score: number | null;
-  llr: number | null;
-  logdice: number | null;
-  combined_score: number | null;
   minmax_score: number | null;
+  frequency_level: string;
 }
 
 export interface ExampleSentence {
