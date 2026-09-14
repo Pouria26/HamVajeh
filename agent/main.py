@@ -86,6 +86,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    logfire.force_flush()
     await state.db.close()
 
 
@@ -131,8 +132,9 @@ async def purge_cache(max_age_days: int = 30) -> dict:
     return {"purged": results, "max_age_days": max_age_days}
 
 
-def compute_chat_cache_key(message: str) -> str:
-    normalized = " ".join(message.strip().split())
+def compute_chat_cache_key(query: str) -> str:
+    """Returns a deterministic SHA256 hex digest of the normalized query."""
+    normalized = " ".join(query.strip().split())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
@@ -148,16 +150,25 @@ async def chat(payload: ChatRequest) -> ChatResponse:
         cache_key = compute_chat_cache_key(payload.message)
         cached = await state.db.get_cached_chat(cache_key)
         if cached is not None:
+            with logfire.span("هم‌یار - چت کاربر: {query}", query=payload.message) as span:
+                span.set_attribute("cache_hit", True)
+                span.set_attribute("history_turns", 0)
+                span.set_attribute("agent.reply", cached.reply)
+                span.set_attribute("agent.suggested_followups", cached.suggested_followups)
             return cached
 
     # 2) Execute Pydantic AI agent with real database tools and FallbackModel chain
     try:
         prompt = format_chat_prompt(payload.message, payload.history)
-        with logfire.span("هم‌یار - چت کاربر: {query}", query=payload.message):
+        with logfire.span("هم‌یار - چت کاربر: {query}", query=payload.message) as span:
+            span.set_attribute("cache_hit", False)
+            span.set_attribute("history_turns", len(payload.history))
             result = await state.chatbot_agent.run(
                 prompt, deps=AgentDeps(db=state.db), usage_limits=CHAT_USAGE_LIMITS
             )
-        response: ChatResponse = result.output
+            response: ChatResponse = result.output
+            span.set_attribute("agent.reply", response.reply)
+            span.set_attribute("agent.suggested_followups", response.suggested_followups)
 
         # 3) Store initial query in PostgreSQL cache for instant subsequent hits
         if cache_key is not None:
@@ -176,10 +187,16 @@ async def chat(payload: ChatRequest) -> ChatResponse:
                 "به عنوان دستیار زبان‌شناسی «هم‌یار»، بدون استفاده از ابزارهای دیتابیسی و صرفاً بر پایه شمّ زبانی و قواعد علمی، "
                 "به صورت شیوا، دقیق و آموزشی به کاربر پاسخ بده و بررسی کن آیا این عبارت یک باهم‌آیی طبیعی است یا خیر."
             )
-            fallback_result = await state.chatbot_agent.run(
-                fallback_prompt, deps=None, usage_limits=UsageLimits(request_limit=3)
-            )
-            return fallback_result.output
+            with logfire.span("هم‌یار - چت کاربر (پاسخ جایگزین زبانی): {query}", query=payload.message) as span:
+                span.set_attribute("cache_hit", False)
+                span.set_attribute("is_fallback", True)
+                fallback_result = await state.chatbot_agent.run(
+                    fallback_prompt, deps=None, usage_limits=UsageLimits(request_limit=3)
+                )
+                fb_output: ChatResponse = fallback_result.output
+                span.set_attribute("agent.reply", fb_output.reply)
+                span.set_attribute("agent.suggested_followups", fb_output.suggested_followups)
+                return fb_output
         except Exception:
             return ChatResponse(
                 reply=(
@@ -222,6 +239,14 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
     # 1) Exact-match cache first - never pay for the same question twice
     cached = await state.db.get_cached_judgment(payload.example_id, payload.selected_option_id)
     if cached is not None:
+        with logfire.span("هم‌یار - تحلیل تمرین: {example_id}", example_id=payload.example_id) as span:
+            span.set_attribute("cache_hit", True)
+            span.set_attribute("example_id", payload.example_id)
+            span.set_attribute("selected_option_id", payload.selected_option_id)
+            span.set_attribute("verdict", cached.verdict)
+            span.set_attribute("flag_for_review", cached.flag_for_review)
+            span.set_attribute("linguistic_reasoning", cached.linguistic_reasoning)
+            span.set_attribute("user_facing_answer", cached.user_facing_answer)
         return cached
 
     # 2) Pull real evidence from Postgres
@@ -237,9 +262,22 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
     # 3) Ask the agent with resilient model chain and usage limit
     try:
         context = render_exercise_context(evidence)
-        with logfire.span("هم‌یار - تحلیل تمرین: {sentence}", sentence=evidence.blank_sentence):
+        with logfire.span("هم‌یار - تحلیل تمرین: {sentence}", sentence=evidence.blank_sentence) as span:
+            span.set_attribute("cache_hit", False)
+            span.set_attribute("example_id", payload.example_id)
+            span.set_attribute("selected_option_id", payload.selected_option_id)
+            span.set_attribute("collocation_id", evidence.collocation_id)
+            span.set_attribute("collocation_display", evidence.collocation_display)
+            span.set_attribute("selected_word", evidence.selected_word)
+            span.set_attribute("correct_word", evidence.correct_word)
+
             result = await state.exercise_agent.run(context, usage_limits=EXPLAIN_USAGE_LIMITS)
-        judgment: ExerciseJudgment = result.output
+            judgment: ExerciseJudgment = result.output
+
+            span.set_attribute("verdict", judgment.verdict)
+            span.set_attribute("flag_for_review", judgment.flag_for_review)
+            span.set_attribute("linguistic_reasoning", judgment.linguistic_reasoning)
+            span.set_attribute("user_facing_answer", judgment.user_facing_answer)
 
         # 4) Persist: cache the answer, and log a flag if the agent flagged it for review
         await state.db.store_cached_judgment(
@@ -271,6 +309,11 @@ async def generate_sentences(payload: SentenceWorkshopRequest) -> SentenceWorksh
     # 1) Check exact-match cache by collocation_id
     cached = await state.db.get_cached_sentences(payload.collocation_id)
     if cached is not None:
+        with logfire.span("هم‌یار - کارگاه جمله‌ساز: {collocation}", collocation=payload.display_form) as span:
+            span.set_attribute("cache_hit", True)
+            span.set_attribute("collocation_id", payload.collocation_id)
+            span.set_attribute("display_form", payload.display_form)
+            span.set_attribute("generated_sentences", [s.sentence for s in cached.sentences])
         return cached
 
     prompt = (
@@ -280,11 +323,15 @@ async def generate_sentences(payload: SentenceWorkshopRequest) -> SentenceWorksh
     )
 
     try:
-        with logfire.span("هم‌یار - کارگاه جمله‌ساز: {collocation}", collocation=payload.display_form):
+        with logfire.span("هم‌یار - کارگاه جمله‌ساز: {collocation}", collocation=payload.display_form) as span:
+            span.set_attribute("cache_hit", False)
+            span.set_attribute("collocation_id", payload.collocation_id)
+            span.set_attribute("display_form", payload.display_form)
             result = await state.sentence_workshop_agent.run(prompt, usage_limits=SENTENCE_WORKSHOP_LIMITS)
-        response: SentenceWorkshopResponse = result.output
-        response.collocation_id = payload.collocation_id
-        response.display_form = payload.display_form
+            response: SentenceWorkshopResponse = result.output
+            response.collocation_id = payload.collocation_id
+            response.display_form = payload.display_form
+            span.set_attribute("generated_sentences", [s.sentence for s in response.sentences])
 
         # 2) Cache the generated sentences in Postgres
         await state.db.store_cached_sentences(payload.collocation_id, payload.display_form, response)
@@ -330,6 +377,16 @@ async def search_assist(payload: SearchAssistantRequest) -> SearchAssistantRespo
     # 1) Check exact-match cache
     cached = await state.db.get_cached_search_assistant(query_hash)
     if cached is not None:
+        with logfire.span("هم‌یار - تحلیل جستجو: {query}", query=query_cleaned) as span:
+            span.set_attribute("cache_hit", True)
+            span.set_attribute("query", query_cleaned)
+            span.set_attribute("status_type", cached.status_type)
+            span.set_attribute("badge_label", cached.badge_label)
+            span.set_attribute("summary", cached.summary)
+            span.set_attribute("linguistic_analysis", cached.linguistic_analysis)
+            span.set_attribute("suggested_collocations", cached.suggested_collocations)
+            if cached.example_sentence:
+                span.set_attribute("example_sentence", cached.example_sentence)
         return cached
 
     prompt = (
@@ -339,10 +396,20 @@ async def search_assist(payload: SearchAssistantRequest) -> SearchAssistantRespo
     )
 
     try:
-        with logfire.span("هم‌یار - تحلیل جستجو: {query}", query=query_cleaned):
+        with logfire.span("هم‌یار - تحلیل جستجو: {query}", query=query_cleaned) as span:
+            span.set_attribute("cache_hit", False)
+            span.set_attribute("query", query_cleaned)
             result = await state.search_assistant_agent.run(prompt, usage_limits=SEARCH_ASSIST_LIMITS)
-        response: SearchAssistantResponse = result.output
-        response.query = query_cleaned
+            response: SearchAssistantResponse = result.output
+            response.query = query_cleaned
+
+            span.set_attribute("status_type", response.status_type)
+            span.set_attribute("badge_label", response.badge_label)
+            span.set_attribute("summary", response.summary)
+            span.set_attribute("linguistic_analysis", response.linguistic_analysis)
+            span.set_attribute("suggested_collocations", response.suggested_collocations)
+            if response.example_sentence:
+                span.set_attribute("example_sentence", response.example_sentence)
 
         # 2) Cache the response in Postgres
         await state.db.store_cached_search_assistant(query_hash, query_cleaned, response)
