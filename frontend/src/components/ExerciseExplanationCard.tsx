@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { explainExerciseError } from "../api/agent";
 import { Spinner } from "./ui/Spinner";
 import { MarkdownContent } from "./MarkdownContent";
+import { ContinueInChatModal } from "./ContinueInChatModal";
 import type { AgentExplainResponse } from "../types";
 
 interface Props {
@@ -11,6 +11,24 @@ interface Props {
   selectedOptionText: string;
   correctAnswerText: string;
   blankSentence: string;
+}
+
+function formatLinguisticConfidence(confidence: unknown): string {
+  if (typeof confidence === "string") {
+    const trimmed = confidence.trim().toLowerCase();
+    if (trimmed === "high") return "بالا (۹۵٪)";
+    if (trimmed === "medium") return "متوسط (۷۵٪)";
+    if (trimmed === "low") return "پایین (۵۰٪)";
+    const parsed = parseFloat(trimmed);
+    if (!Number.isNaN(parsed)) {
+      return `${Math.round(parsed <= 1 ? parsed * 100 : parsed)}٪`;
+    }
+    return trimmed;
+  }
+  if (typeof confidence === "number" && !Number.isNaN(confidence)) {
+    return `${Math.round(confidence <= 1 ? confidence * 100 : confidence)}٪`;
+  }
+  return "بالا (۹۵٪)";
 }
 
 export function ExerciseExplanationCard({
@@ -24,6 +42,7 @@ export function ExerciseExplanationCard({
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AgentExplainResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   const fetchExplanation = async () => {
     if (loading || data) {
@@ -150,7 +169,7 @@ export function ExerciseExplanationCard({
                 )}
 
                 <span className="rounded-full bg-white/80 border border-ink-100 px-2.5 py-1 text-ink-500">
-                  اطمینان زبانی: {Math.round(data.confidence * 100)}٪
+                  اطمینان زبانی: {formatLinguisticConfidence(data.confidence)}
                 </span>
 
                 {data.flag_for_review && (
@@ -168,13 +187,27 @@ export function ExerciseExplanationCard({
                 <span className="text-ink-400">
                   💡 می‌خواهید درباره ساختار این جمله بیشتر تمرین کنید؟
                 </span>
-                <Link
-                  to={`/tutor?q=${encodeURIComponent(tutorQuery)}`}
-                  className="inline-flex items-center gap-1 font-semibold text-brand-600 hover:text-brand-700 hover:underline"
+                <button
+                  type="button"
+                  onClick={() => setIsChatModalOpen(true)}
+                  className="inline-flex cursor-pointer items-center gap-1 font-semibold text-brand-600 hover:text-brand-700 hover:underline"
                 >
                   ادامه گفتگو با هم‌یار در چت زنده ←
-                </Link>
+                </button>
               </div>
+
+              <ContinueInChatModal
+                isOpen={isChatModalOpen}
+                onClose={() => setIsChatModalOpen(false)}
+                prompt={tutorQuery}
+                reply={data.user_facing_answer}
+                suggestedFollowups={[
+                  `چند مثال کاربردی دیگر با باهم‌آیی «${correctAnswerText}» بنویس.`,
+                  `تفاوت کاربرد «${correctAnswerText}» و «${selectedOptionText}» را در بافت‌های مختلف بگو.`,
+                ]}
+                defaultTitle={`تحلیل تمرین: ${correctAnswerText}`}
+                badgeLabel="تحلیل خطای تمرین با هم‌یار"
+              />
             </div>
           )}
         </div>

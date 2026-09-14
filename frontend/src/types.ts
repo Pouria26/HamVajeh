@@ -267,7 +267,7 @@ export interface AgentExplainPayload {
 
 export interface AgentExplainResponse {
   agrees_with_database: "agree" | "disagree" | "uncertain";
-  confidence: number;
+  confidence: "low" | "medium" | "high" | number;
   linguistic_reasoning: string;
   user_facing_answer: string;
   flag_for_review: boolean;

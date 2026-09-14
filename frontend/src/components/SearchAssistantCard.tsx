@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { getSearchAssistantAnalysis } from "../api/agent";
 import { Spinner } from "./ui/Spinner";
 import { MarkdownContent } from "./MarkdownContent";
+import { ContinueInChatModal } from "./ContinueInChatModal";
 import type { SearchAssistantResponse, SearchAssistantStatusType } from "../types";
 
 interface SearchAssistantCardProps {
@@ -46,6 +46,7 @@ export function SearchAssistantCard({
   const [analysis, setAnalysis] = useState<SearchAssistantResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   const handleFetchAnalysis = async () => {
     setIsLoading(true);
@@ -192,17 +193,17 @@ export function SearchAssistantCard({
 
           {/* Footer actions */}
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 pt-4">
-            <Link
-              to={`/tutor?q=${encodeURIComponent(
-                `درباره عبارت «${analysis.query}» و تفاوت آن با باهم‌آیی‌های اصیل فارسی بیشتر برایم توضیح بده.`
-              )}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100"
+            <button
+              type="button"
+              onClick={() => setIsChatModalOpen(true)}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100"
             >
               <span>💬</span>
               <span>ادامه گفتگو درباره این واژه در صفحه چت</span>
-            </Link>
+            </button>
 
             <button
+              type="button"
               onClick={handleFetchAnalysis}
               className="inline-flex cursor-pointer items-center gap-1 text-xs font-semibold text-ink-500 hover:text-ink-800"
             >
@@ -210,6 +211,34 @@ export function SearchAssistantCard({
               <span>تحلیل مجدد</span>
             </button>
           </div>
+
+          <ContinueInChatModal
+            isOpen={isChatModalOpen}
+            onClose={() => setIsChatModalOpen(false)}
+            prompt={`درباره عبارت «${analysis.query}» و تفاوت آن با باهم‌آیی‌های اصیل فارسی بیشتر برایم توضیح بده.`}
+            reply={[
+              `### تحلیل هوشمند عبارت «${analysis.query}»`,
+              `**وضعیت:** ${analysis.badge_label}`,
+              "",
+              analysis.summary,
+              "",
+              analysis.linguistic_analysis,
+              analysis.example_sentence ? `\n> **جمله نمونه کاربردی:**\n> «${analysis.example_sentence}»` : "",
+              analysis.suggested_collocations && analysis.suggested_collocations.length > 0
+                ? `\n**باهم‌آیی‌های اصیل و معتبر پیشنهادی:**\n` +
+                  analysis.suggested_collocations.map((c) => `- «${c}»`).join("\n")
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n\n")}
+            suggestedFollowups={
+              analysis.suggested_collocations && analysis.suggested_collocations.length > 0
+                ? analysis.suggested_collocations.map((c) => `درباره باهم‌آیی «${c}» بیشتر توضیح بده`)
+                : [`با این واژه چند ترکیب رایج‌تر مثال بزن.`]
+            }
+            defaultTitle={`بررسی همنشینی: ${analysis.query}`}
+            badgeLabel={`تحلیل واژه با هم‌یار (${analysis.badge_label})`}
+          />
         </div>
       )}
     </div>

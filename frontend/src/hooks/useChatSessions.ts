@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AgentChatMessage, ChatSession } from "../types";
+import { SESSIONS_UPDATED_EVENT } from "../utils/chatHandoff";
 
 const SESSIONS_STORAGE_KEY = "hamvajeh_tutor_sessions_v2";
 const ACTIVE_SESSION_STORAGE_KEY = "hamvajeh_tutor_active_session_id_v2";
@@ -94,6 +95,34 @@ export function useChatSessions() {
       // Ignore quota errors
     }
   }, [sessions, activeSessionId]);
+
+  // Sync sessions when updated externally (cross-page handoff or cross-tab)
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem(SESSIONS_STORAGE_KEY);
+        const savedActive = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSessions(parsed as ChatSession[]);
+          }
+        }
+        if (savedActive) {
+          setActiveSessionId(savedActive);
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    };
+
+    window.addEventListener("storage", handleSync);
+    window.addEventListener(SESSIONS_UPDATED_EVENT, handleSync);
+    return () => {
+      window.removeEventListener("storage", handleSync);
+      window.removeEventListener(SESSIONS_UPDATED_EVENT, handleSync);
+    };
+  }, []);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
 

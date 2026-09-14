@@ -2,6 +2,7 @@ import { useState } from "react";
 import { generateCollocationSentences } from "../api/agent";
 import { Spinner } from "./ui/Spinner";
 import { MarkdownContent } from "./MarkdownContent";
+import { ContinueInChatModal } from "./ContinueInChatModal";
 import type { GeneratedSentenceItem, SentenceContextType } from "../types";
 
 interface SentenceWorkshopProps {
@@ -51,6 +52,7 @@ export function SentenceWorkshop({ collocationId, displayForm }: SentenceWorksho
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   const handleGenerate = async () => {
     setIsLoading(true);
@@ -231,6 +233,46 @@ export function SentenceWorkshop({ collocationId, displayForm }: SentenceWorksho
               </div>
             );
           })}
+
+          {/* Handoff to HamYar Chat */}
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200/80 bg-brand-50/50 p-4 text-xs">
+            <div className="flex items-center gap-2 text-ink-700">
+              <span className="text-base">💡</span>
+              <span className="font-medium">
+                می‌خواهید درباره کاربرد این جملات با هم‌یار هوشمند بیشتر گفتگو یا تمرین کنید؟
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsChatModalOpen(true)}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-brand-500 px-4 py-2 font-semibold text-white shadow-xs transition hover:bg-brand-600 active:scale-95"
+            >
+              <span>✨</span>
+              <span>ادامه تمرین این جملات در هم‌یار</span>
+            </button>
+          </div>
+
+          <ContinueInChatModal
+            isOpen={isChatModalOpen}
+            onClose={() => setIsChatModalOpen(false)}
+            prompt={`لطفاً ۳ جمله کاربردی در بافت‌های مختلف با باهم‌آیی «${displayForm}» به همراه تحلیل کاربرد بساز.`}
+            reply={[
+              `### کارگاه جمله‌ساز با باهم‌آیی «${displayForm}»`,
+              "",
+              ...sentences.map((s, idx) => {
+                const meta = CONTEXT_META[s.context_type] || CONTEXT_META.formal;
+                return `#### ${idx + 1}. سبک ${s.context_title || meta.tagLabel}\n> «${s.sentence}»\n\n${s.explanation || ""}`;
+              }),
+            ].join("\n\n")}
+            suggestedFollowups={[
+              `یک پاراگراف کوتاه داستانی با باهم‌آیی «${displayForm}» بنویس.`,
+              `هم‌آیی‌های مترادف یا هم‌خانواده با «${displayForm}» را بگو.`,
+              `آیا این ترکیب در زبان محاوره تهرانی هم رایج است؟`,
+            ]}
+            defaultTitle={`کارگاه جمله‌ساز: ${displayForm}`}
+            badgeLabel="کارگاه جمله‌ساز هم‌یار"
+          />
         </div>
       )}
     </div>

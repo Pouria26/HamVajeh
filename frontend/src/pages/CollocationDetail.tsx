@@ -9,6 +9,7 @@ import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
 import { ReportModal, ReportTrigger } from "../components/ReportModal";
 import { SentenceWorkshop } from "../components/SentenceWorkshop";
+import { ContinueInChatModal } from "../components/ContinueInChatModal";
 import type { CollocationDetailResponse, CollocationSummary } from "../types";
 
 export function CollocationDetail() {
@@ -22,6 +23,7 @@ export function CollocationDetail() {
   // undefined: closed. { exampleId: undefined }: reporting the collocation
   // itself. { exampleId: N }: reporting one specific example sentence.
   const [reportTarget, setReportTarget] = useState<{ exampleId?: number } | null>(null);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -114,16 +116,23 @@ export function CollocationDetail() {
           >
             ✍️ تمرین همین باهم‌آیی
           </Link>
-          <Link
-            to={`/tutor?q=${encodeURIComponent(
-              `درباره باهم‌آیی «${collocation.display_form}»، معنای آن و نحوه کاربردش در جمله‌های مختلف فارسی برایم توضیح بده.`
-            )}`}
-            className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-5 py-2.5 font-medium text-brand-700 shadow-xs transition hover:-translate-y-0.5 hover:bg-brand-100 hover:shadow-sm active:translate-y-0 text-sm"
+          <button
+            type="button"
+            onClick={() => setIsChatModalOpen(true)}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-5 py-2.5 font-medium text-brand-700 shadow-xs transition hover:-translate-y-0.5 hover:bg-brand-100 hover:shadow-sm active:translate-y-0 text-sm"
           >
             ✨ از هم‌یار هوشمند بپرس
-          </Link>
+          </button>
           <ReportTrigger onClick={() => setReportTarget({})} label="گزارش خطا در این باهم‌آیی" variant="outline" />
         </div>
+
+        <ContinueInChatModal
+          isOpen={isChatModalOpen}
+          onClose={() => setIsChatModalOpen(false)}
+          prompt={`درباره باهم‌آیی «${collocation.display_form}»، معنای آن و نحوه کاربردش در جمله‌های مختلف فارسی برایم توضیح بده.`}
+          defaultTitle={`باهم‌آیی: ${collocation.display_form}`}
+          badgeLabel={`پرسش درباره «${collocation.display_form}»`}
+        />
       </div>
 
       <div className="mt-8">

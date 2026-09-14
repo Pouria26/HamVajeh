@@ -557,6 +557,7 @@ logfire.instrument_pydantic_ai()
   - Manages multiple concurrent conversation threads with the AI Tutor.
   - Automatically derives session titles from the first prompt (cleaning greetings and punctuation).
   - Persists sessions in `localStorage` under `hamvajeh_tutor_sessions_v2`.
+  - Listens to `hamvajeh_sessions_updated` and `storage` events for instant cross-page and cross-tab synchronisation.
 * **`useDebounce`**:
   - 300ms debounce on search input to prevent rapid server queries.
 * **`localHistory`**:
@@ -564,6 +565,30 @@ logfire.instrument_pydantic_ai()
 * **PWA & Offline**:
   - Configured with `vite-plugin-pwa` generating `sw.js` and Workbox precaching.
   - Offline fallback with prompt to update via `UpdateToast.tsx`.
+
+### 10.3 Zero-Quota Chat Handoff Architecture (`chatHandoff.ts` & `ContinueInChatModal.tsx`)
+To eliminate duplicate LLM inference calls and prevent quota waste (RPD depletion), cross-page navigation to the AI Tutor uses the **Pre-seeded Chat Injection (State Handoff) Pattern**:
+
+1. **Pre-Seeded Injection Mechanism (`frontend/src/utils/chatHandoff.ts`)**:
+   - `transferToChat(options)`: Directly injects pre-computed question and AI answer as paired `AgentChatMessage` objects into `localStorage` prior to route navigation.
+   - When arriving at `/tutor`, `searchParams` contains no `?q=` parameter, so no redundant `POST /api/agent/chat` request is triggered.
+   - The user immediately sees the question and answer without loading delay; typing a follow-up seamlessly includes both messages in the multi-turn context history.
+2. **Session Destination Modal (`frontend/src/components/ContinueInChatModal.tsx`)**:
+   - Invoked across all AI-assisted pages:
+     - `ExerciseExplanationCard.tsx`: Transfers quiz error linguistic analysis.
+     - `SearchAssistantCard.tsx`: Transfers unnatural calque / non-collocation analysis and suggestions.
+     - `SentenceWorkshop.tsx`: Transfers generated 3-register sentences for conversational drill practice.
+     - `CollocationDetail.tsx`: Prompts for session destination before launching live tutor exploration.
+   - Offers two explicit user choices:
+     - **«شروع در گفتگوی جدید» (Recommended)**: Spawns an isolated session titled specifically for the target collocation or exercise.
+     - **«ادامه در گفتگوی فعلی»**: Appends the analysis to the end of the active conversation thread with message count indication.
+3. **Linguistic Confidence Normalization**:
+   - The AI agent returns qualitative confidence tiers (`"high" | "medium" | "low"`).
+   - The frontend normalizer `formatLinguisticConfidence` maps these to Persian labels with descriptive percentages:
+     - `"high"` $\to$ «بالا (۹۵٪)»
+     - `"medium"` $\to$ «متوسط (۷۵٪)»
+     - `"low"` $\to$ «پایین (۵۰٪)»
+   - Prevents `NaN%` display errors caused by direct arithmetic multiplication on string types.
 
 ---
 
