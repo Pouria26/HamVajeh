@@ -477,6 +477,7 @@ The model chain is initialized in `agent/agent.py` using Pydantic AI's `Fallback
   - `search_collocations(query)`: Searches the Hamshahri database and returns collocations + `sample_sentence`.
   - `get_collocation_details(collocation_id)`: Fetches deeper metrics and additional sentences (bounded; never looped).
   - `get_collocation_examples(collocation_id)`: Fetches raw sentence strings.
+* **Persian Orthographic Purity & Enclitic Integrity**: Strictly mandates 100% authentic Persian alphabet and Academy half-space standards. Explicitly forbids Latin phonetic transliterations or English clitic suffixes (e.g., forbids `em`, `am`, `esh` in expressions like `خبرem` in place of the correct Persian `خبرم`). Enforces seamless attachment or half-space for pronominal clitics («ـَم»، «ـَت»، «ـَش»).
 * **Guardrail**: All `@agent.tool` functions enforce null-safety on `ctx.deps`: `if ctx.deps is None or getattr(ctx.deps, "db", None) is None:`.
 * **Execution Limit**: Hard cap at `UsageLimits(request_limit=6)` (reduced from 15). Catches `UsageLimitExceeded` and returns a direct linguistic fallback without HTTP 500.
 
@@ -586,6 +587,7 @@ To eliminate duplicate LLM inference calls and prevent quota waste (RPD depletio
    - Offers two explicit user choices:
      - **«شروع در گفتگوی جدید» (Recommended)**: Spawns an isolated session titled specifically for the target collocation or exercise.
      - **«ادامه در گفتگوی فعلی»**: Appends the analysis to the end of the active conversation thread with message count indication.
+   - **Responsive Viewport & Scroll Architecture**: Employs a flex-column layout (`max-h-[calc(100dvh-2rem)] flex flex-col`) with `shrink-0` pinned header and footer actions, an independent scrollable body (`flex-1 overflow-y-auto overscroll-contain`), and an `overflow-y-auto` backdrop with `my-auto` centering. This prevents vertical cutoffs and content clipping on mobile viewports and short browser windows, ensuring the action buttons and session choices remain permanently accessible.
 3. **Linguistic Confidence Normalization**:
    - The AI agent returns qualitative confidence tiers (`"high" | "medium" | "low"`).
    - The frontend normalizer `formatLinguisticConfidence` maps these to Persian labels with descriptive percentages:

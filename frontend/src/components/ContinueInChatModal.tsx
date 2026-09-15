@@ -97,7 +97,7 @@ export function ContinueInChatModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-ink-900/60 backdrop-blur-xs animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-ink-900/60 backdrop-blur-xs animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -107,10 +107,10 @@ export function ContinueInChatModal({
     >
       <div
         ref={modalRef}
-        className="w-full max-w-lg overflow-hidden rounded-3xl border border-brand-100 bg-white shadow-2xl transition-all animate-scale-in"
+        className="relative my-auto flex max-h-[calc(100dvh-2rem)] sm:max-h-[min(650px,calc(100dvh-3rem))] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-brand-100 bg-white shadow-2xl transition-all animate-scale-in"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-ink-100 bg-gradient-to-r from-brand-50/70 via-white to-brand-50/30 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-ink-100 bg-gradient-to-r from-brand-50/70 via-white to-brand-50/30 px-5 py-4">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-2xl bg-brand-500 text-lg text-white shadow-xs">
               ✨
@@ -136,7 +136,7 @@ export function ContinueInChatModal({
         </div>
 
         {/* Modal Body */}
-        <div className="space-y-4 p-5">
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-4 p-5 overscroll-contain">
           {/* Zero-quota badge notice */}
           {hasReply ? (
             <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2.5 text-xs text-emerald-800">
@@ -256,7 +256,7 @@ export function ContinueInChatModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2.5 border-t border-ink-100 bg-ink-50/40 px-5 py-3.5">
+        <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-ink-100 bg-ink-50/40 px-5 py-3.5">
           <button
             type="button"
             onClick={onClose}
