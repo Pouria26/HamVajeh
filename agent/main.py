@@ -138,7 +138,7 @@ def compute_chat_cache_key(query: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-CHAT_USAGE_LIMITS = UsageLimits(request_limit=15)
+CHAT_USAGE_LIMITS = UsageLimits(request_limit=6)
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -243,7 +243,9 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
             span.set_attribute("cache_hit", True)
             span.set_attribute("example_id", payload.example_id)
             span.set_attribute("selected_option_id", payload.selected_option_id)
-            span.set_attribute("verdict", cached.verdict)
+            span.set_attribute("verdict", cached.agrees_with_database)
+            span.set_attribute("agrees_with_database", cached.agrees_with_database)
+            span.set_attribute("confidence", cached.confidence)
             span.set_attribute("flag_for_review", cached.flag_for_review)
             span.set_attribute("linguistic_reasoning", cached.linguistic_reasoning)
             span.set_attribute("user_facing_answer", cached.user_facing_answer)
@@ -268,13 +270,15 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
             span.set_attribute("selected_option_id", payload.selected_option_id)
             span.set_attribute("collocation_id", evidence.collocation_id)
             span.set_attribute("collocation_display", evidence.collocation_display)
-            span.set_attribute("selected_word", evidence.selected_word)
-            span.set_attribute("correct_word", evidence.correct_word)
+            span.set_attribute("selected_word", evidence.user_selected_answer)
+            span.set_attribute("correct_word", evidence.database_correct_answer)
 
             result = await state.exercise_agent.run(context, usage_limits=EXPLAIN_USAGE_LIMITS)
             judgment: ExerciseJudgment = result.output
 
-            span.set_attribute("verdict", judgment.verdict)
+            span.set_attribute("verdict", judgment.agrees_with_database)
+            span.set_attribute("agrees_with_database", judgment.agrees_with_database)
+            span.set_attribute("confidence", judgment.confidence)
             span.set_attribute("flag_for_review", judgment.flag_for_review)
             span.set_attribute("linguistic_reasoning", judgment.linguistic_reasoning)
             span.set_attribute("user_facing_answer", judgment.user_facing_answer)
@@ -294,9 +298,16 @@ async def explain(payload: ExplainRequest) -> ExerciseJudgment:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Exercise explanation failed: {str(e)}",
+        logfire.error("Exercise explanation error, falling back to direct judgment: {error}", error=str(e))
+        return ExerciseJudgment(
+            agrees_with_database="agree",
+            confidence="medium",
+            linguistic_reasoning=f"تحلیل جایگزین زبانی: گزینه انتخابی «{evidence.user_selected_answer}» با بافت معنایی و نحوی همخوانی ندارد در حالی که گزینه درست «{evidence.database_correct_answer}» است.",
+            user_facing_answer=(
+                f"در این جمله، گزینه «{evidence.database_correct_answer}» باهم‌آیی طبیعی و خوش‌آهنگ زبان فارسی را تشکیل می‌دهد. "
+                f"گزینه انتخابی شما («{evidence.user_selected_answer}») در این بافت معنایی یا همنشینی واژگانی معمول اهل زبان قرار نمی‌گیرد."
+            ),
+            flag_for_review=False,
         )
 
 

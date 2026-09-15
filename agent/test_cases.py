@@ -49,7 +49,7 @@ async def test_step1() -> bool:
 
     print("1.1 Testing Model & Agent Construction...")
     db = await Database.connect(settings.database_url)
-    model = build_model(settings.google_api_key)
+    model = build_model(settings.google_api_key, settings.nvidia_api_key)
     chatbot = build_chatbot_agent(model)
     deps = AgentDeps(db=db)
     print("    Model chain initialized with high-quota fallback.")
@@ -111,14 +111,14 @@ async def test_step2() -> bool:
 
     details = await db.get_collocation_details(top.id)
     assert details is not None, f"Could not retrieve details for ID {top.id}"
-    print(f"    - Details: PMI={details.pmi}, logDice={details.logdice}, Examples={len(details.examples)}")
+    print(f"    - Details: Score={details.minmax_score}, Frequency={details.frequency_level}, Examples={len(details.examples)}")
 
     examples = await db.get_collocation_examples(top.id, limit=3)
     assert len(examples) > 0, "Could not retrieve examples"
     print(f"    - Sample authentic sentence: '{examples[0][:60]}...'")
 
     print("\n2.3 Testing Pydantic AI Agent with Live Database Tools...")
-    model = build_model(settings.google_api_key)
+    model = build_model(settings.google_api_key, settings.nvidia_api_key)
     agent = build_chatbot_agent(model)
     deps = AgentDeps(db=db)
 
@@ -184,7 +184,7 @@ async def test_step3() -> bool:
     print(f"    - Collocation ID: {evidence.collocation_id}, Status: {evidence.status}")
 
     print("\n3.3 Testing Exercise Explanation Agent (Independent Linguistic Judgment)...")
-    model = build_model(settings.google_api_key)
+    model = build_model(settings.google_api_key, settings.nvidia_api_key)
     exercise_agent = build_exercise_agent(model)
 
     context = render_exercise_context(evidence)

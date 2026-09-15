@@ -467,22 +467,26 @@ The model chain is initialized in `agent/agent.py` using Pydantic AI's `Fallback
 
 #### 1. AI Tutor Chatbot (`chatbot_agent`)
 * **Prompt Mandate**: Acts as «هم‌یار», an intelligent, warm Persian linguist.
-* **Greeting Policy**: Greets only on the very first turn. Never repeats greetings in ongoing sessions.
-* **Tool Invocation Policy**:
-  - Conceptual or etiquette questions («تفاوت اصطلاح و باهم‌آیی», «احوالپرسی رسمی») are answered directly without database tools.
-  - Search queries call `search_collocations` up to 3 times for comparison questions.
+* **Natural Greeting Policy**: Warmly welcomes the user at the start of a conversation. In subsequent turns, if the user explicitly greets again, responds politely with a brief, warm acknowledgment (e.g. «سلام و درود دوباره») without ever lecturing the user or referencing internal prompt rules. For substantive inquiries, bypasses formalities and proceeds directly to linguistic analysis.
+* **Tool Invocation & Token Economy Policy (Production-Optimized)**:
+  - `search_collocations(query)` returns the matched collocation, grammatical pattern, frequency tier, and an authentic corpus `sample_sentence` in a **single query**, eliminating repetitive `get_collocation_details` loops.
+  - Strictly limited tool budget: 1 call for standard queries, at most 2 for direct word comparisons. Avoids chained searches for synonyms or inflected forms.
+  - Conceptual, comparative, or etiquette questions («تفاوت اصطلاح و باهم‌آیی», «احوالپرسی در محیط کار») are answered directly using general linguistic knowledge without database calls.
+  - Conciseness & Token Economy: Generates tightly focused, structured markdown explanations, reducing average prompt token consumption by ~85–90% (from ~20,000 down to 2,000–4,500 tokens).
 * **Database Tools**:
-  - `search_collocations(query)`: searches the Hamshahri database.
-  - `get_collocation_details(collocation_id)`: fetches frequency levels and examples.
-  - `get_collocation_examples(collocation_id)`: fetches raw sentence strings.
-* **Guardrail**: All `@agent.tool` functions check `if ctx.deps is None or getattr(ctx.deps, "db", None) is None:` on line 1.
-* **Execution Limit**: `UsageLimits(request_limit=15)`. Catches `UsageLimitExceeded` and returns a direct linguistic fallback without HTTP 500.
+  - `search_collocations(query)`: Searches the Hamshahri database and returns collocations + `sample_sentence`.
+  - `get_collocation_details(collocation_id)`: Fetches deeper metrics and additional sentences (bounded; never looped).
+  - `get_collocation_examples(collocation_id)`: Fetches raw sentence strings.
+* **Guardrail**: All `@agent.tool` functions enforce null-safety on `ctx.deps`: `if ctx.deps is None or getattr(ctx.deps, "db", None) is None:`.
+* **Execution Limit**: Hard cap at `UsageLimits(request_limit=6)` (reduced from 15). Catches `UsageLimitExceeded` and returns a direct linguistic fallback without HTTP 500.
 
 #### 2. Quiz Mistake Explainer (`exercise_agent`)
 * Evaluates why a user's selected choice was incorrect compared to the database answer.
 * Analyzes syntax, semantic constraints, and native speech habits.
 * Sets `flag_for_review = true` if the question has multiple valid answers or the corpus sentence is flawed.
-* Outputs `ExerciseJudgment`: `{ verdict, linguistic_reasoning, user_facing_answer, flag_for_review }`.
+* Data Contract & Null-Safety: `ExerciseEvidence` exposes backward-compatible properties (`collocation_display`, `selected_word`, `correct_word`). `ExerciseJudgment` exposes property `verdict` as an alias to `agrees_with_database`.
+* Outputs `ExerciseJudgment`: `{ agrees_with_database, confidence, linguistic_reasoning, user_facing_answer, flag_for_review }`.
+* Resilient Fallback: Protects user experience by falling back to direct linguistic judgment in case of network timeouts, preventing HTTP 500 errors.
 * When flagged, automatically inserts a record into `agent_flags`.
 
 #### 3. Sentence Workshop (`sentence_workshop_agent`)

@@ -196,15 +196,16 @@ class Database:
         Excludes low-quality entries with minmax_score < 0.15 (<15).
         """
         sql = """
-        SELECT id, display_form, pos_pattern, minmax_score
-        FROM collocations
-        WHERE (display_form ILIKE '%' || $1 || '%'
-           OR word1 ILIKE '%' || $1 || '%'
-           OR word2 ILIKE '%' || $1 || '%')
-          AND minmax_score >= 0.15
+        SELECT c.id, c.display_form, c.pos_pattern, c.minmax_score,
+               (SELECT e.sentence FROM examples e WHERE e.collocation_id = c.id LIMIT 1) AS sample_sentence
+        FROM collocations c
+        WHERE (c.display_form ILIKE '%' || $1 || '%'
+           OR c.word1 ILIKE '%' || $1 || '%'
+           OR c.word2 ILIKE '%' || $1 || '%')
+          AND c.minmax_score >= 0.15
         ORDER BY
-           (display_form ILIKE $1 || '%') DESC,
-           minmax_score DESC NULLS LAST
+           (c.display_form ILIKE $1 || '%') DESC,
+           c.minmax_score DESC NULLS LAST
         LIMIT $2;
         """
         async with self.pool.acquire() as conn:
@@ -221,6 +222,7 @@ class Database:
                     pos_pattern=r["pos_pattern"],
                     minmax_score=score_100,
                     frequency_level=level,
+                    sample_sentence=r["sample_sentence"],
                 )
             )
         return results

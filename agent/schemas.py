@@ -47,6 +47,10 @@ class CollocationSearchResult(BaseModel):
         default=None,
         description="Qualitative frequency level: پرتکرار (>=60), متداول (>=40), عادی (>=15). None if <15.",
     )
+    sample_sentence: str | None = Field(
+        default=None,
+        description="Authentic sentence example from the corpus.",
+    )
 
 
 class CollocationDetailResult(BaseModel):
@@ -68,7 +72,6 @@ class CollocationDetailResult(BaseModel):
     examples: list[str] = Field(default_factory=list)
 
 
-
 class ExerciseEvidence(BaseModel):
     """Everything fetched from Postgres for one 'why is this wrong' request."""
 
@@ -84,6 +87,18 @@ class ExerciseEvidence(BaseModel):
     blank_sentence: str
     database_correct_answer: str
     user_selected_answer: str
+
+    @property
+    def collocation_display(self) -> str:
+        return f"{self.word1} {self.word2 or ''}".strip()
+
+    @property
+    def selected_word(self) -> str:
+        return self.user_selected_answer
+
+    @property
+    def correct_word(self) -> str:
+        return self.database_correct_answer
 
 
 class ExerciseJudgment(BaseModel):
@@ -106,6 +121,10 @@ class ExerciseJudgment(BaseModel):
     flag_for_review: bool = Field(
         description="True if this dataset item should be queued for human review."
     )
+
+    @property
+    def verdict(self) -> str:
+        return self.agrees_with_database
 
 
 class AuditEvidence(BaseModel):
