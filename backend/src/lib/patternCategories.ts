@@ -31,7 +31,7 @@ export const PATTERN_CATEGORIES: PatternCategory[] = [
     {
         id: "NOUN_NOUN",
         label: "ترکیب‌های اسمی",
-        description: "دو اسم که در کنار هم یک مفهوم واحد می‌سازند (مثل «سرمایه‌گذاری»، «حقوق بشر»).",
+        description: "دو اسم که در کنار هم یک مفهوم واحد می‌سازند (مثل «پدر و مادر»، «حقوق بشر»).",
         patterns: ["NOUN+NOUN", "NOUN+PROPN", "PROPN+NOUN", "NOUN"],
     },
     {
@@ -50,7 +50,7 @@ export const PATTERN_CATEGORIES: PatternCategory[] = [
         id: "OTHER",
         label: "سایر ترکیب‌ها",
         description:
-            "الگوهای کم‌تکرار دیگری که در دسته‌های بالا نمی‌گنجند؛ از جمله ترکیب‌های همراه با حرف اضافه (مثل «وارد گفتگو»).",
+            "الگوهای کم‌تکرار دیگری که در دسته‌های بالا نمی‌گنجند؛ از جمله ترکیب‌های همراه با حرف اضافه (مثل «علی رغم اینکه»).",
         patterns: [], // catch-all — filled in dynamically below
     },
 ];
